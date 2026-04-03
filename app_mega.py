@@ -83,8 +83,8 @@ with st.sidebar:
             sectores = ["Cervical", "Dorsal", "Lumbar", "Sacro", "Coccígeo"]
         elif region in ["MSI", "MSD"]:
             sectores = ["Hombro", "Codo", "Muñeca", "Mano", "Brazo", "Antebrazo"]
-        else:  # Miembro Inferior
-            sectores = ["Cadera", "Rodilla", "Tobillo", "Pie", "Pierna", "Muslo", "Pelvis"]   # ← agregado
+        else:
+            sectores = ["Cadera", "Rodilla", "Tobillo", "Pie", "Pierna", "Muslo", "Pelvis"]
         
         sector_sel = st.selectbox("**2. Sector anatómico**", ["Ver todos"] + sectores, index=0)
         
@@ -104,20 +104,23 @@ with st.sidebar:
         
         cat_sel = st.selectbox("**4. Categoría**", cats, index=0)
         
-        # === FILTRADO ULTRA-ROBUSTO (ninguna lesión se omite) ===
+        # === FILTRADO CORREGIDO ===
         df_filtrado = df_maestro.copy()
         
-        # Filtro por sector (mapa ampliado para extremidades)
+        # Filtro por sector (SOLO se aplica en categorías específicas)
         if sector_sel != "Ver todos":
             if region == "Columna":
-                sector_map = {
-                    "Cervical": r"Cervical|C1|C2|C3|C4|C5|C6|C7|C8|odontoides|apofisis|apófisis|atlas|axis",
-                    "Dorsal": r"Dorsal|D1|D2|D3|D4|D5|D6|D7|D8|D9|D10|D11|D12",
-                    "Lumbar": r"Lumbar|L1|L2|L3|L4|L5",
-                    "Sacro": r"Sacro",
-                    "Coccígeo": r"Coxis|Coccígeo|coccigeo"
-                }
-                kw_sector = sector_map.get(sector_sel, sector_sel)
+                # Para categorías generales (discales, limitación, anquilosis) NO filtramos por sector
+                if cat_sel not in ["Lesiones Discales y Ligamentarias", "Limitación Funcional", "Anquilosis"]:
+                    sector_map = {
+                        "Cervical": r"Cervical|C1|C2|C3|C4|C5|C6|C7|C8|odontoides|apofisis|apófisis|atlas|axis",
+                        "Dorsal": r"Dorsal|D1|D2|D3|D4|D5|D6|D7|D8|D9|D10|D11|D12",
+                        "Lumbar": r"Lumbar|L1|L2|L3|L4|L5",
+                        "Sacro": r"Sacro",
+                        "Coccígeo": r"Coxis|Coccígeo|coccigeo"
+                    }
+                    kw_sector = sector_map.get(sector_sel, sector_sel)
+                    df_filtrado = df_filtrado[df_filtrado['Descripción de Lesión'].str.contains(kw_sector, case=False, regex=True)]
             else:  # Extremidades
                 sector_map = {
                     "Cadera": r"Cadera|Pelvis|hemipelvis|sínfisis|sacroilíaca|ilíaco|pubis",
@@ -129,7 +132,7 @@ with st.sidebar:
                     "Pelvis": r"Pelvis|hemipelvis|sínfisis|sacroilíaca|ilíaco|pubis"
                 }
                 kw_sector = sector_map.get(sector_sel, sector_sel)
-            df_filtrado = df_filtrado[df_filtrado['Descripción de Lesión'].str.contains(kw_sector, case=False, regex=True)]
+                df_filtrado = df_filtrado[df_filtrado['Descripción de Lesión'].str.contains(kw_sector, case=False, regex=True)]
         
         # Filtro por tipo
         if tipo_hallazgo == "Osteoarticular y Ligamentario":
