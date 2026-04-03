@@ -75,26 +75,23 @@ if 'pericia' not in st.session_state:
 with st.sidebar:
     st.header("**Carga de hallazgos**")
     
-    # 1. Región topográfica
     region = st.selectbox("**1. Región topográfica**", ["Columna", "MSI", "MSD", "MII", "MID"], index=None, placeholder="Seleccionar")
     
     if region:
-        # ====================== NUEVO FLUJO ======================
-        # 2. Sector anatómico (primero, como pediste)
+        # 2. Sector anatómico (primero)
         if region == "Columna":
             sectores = ["Cervical", "Dorsal", "Lumbar", "Sacro", "Coccígeo"]
         elif region in ["MSI", "MSD"]:
             sectores = ["Hombro", "Codo", "Muñeca", "Mano", "Brazo", "Antebrazo"]
-        else:  # MII / MID
+        else:
             sectores = ["Cadera", "Rodilla", "Tobillo", "Pie", "Pierna", "Muslo"]
         
         sector_sel = st.selectbox("**2. Sector anatómico**", ["Ver todos"] + sectores, index=0)
         
         # 3. Tipo de hallazgo
-        tipo_hallazgo = st.radio("**3. Tipo de hallazgo**", 
-                                ["Osteoarticular y Ligamentario", "Neurológico"])
+        tipo_hallazgo = st.radio("**3. Tipo de hallazgo**", ["Osteoarticular y Ligamentario", "Neurológico"])
         
-        # 4. Categoría (dinámica según tipo y región)
+        # 4. Categoría
         if tipo_hallazgo == "Osteoarticular y Ligamentario":
             if region == "Columna":
                 cats = ["Ver todas", "Fracturas Vertebrales", "Lesiones Discales y Ligamentarias", 
@@ -107,12 +104,23 @@ with st.sidebar:
         
         cat_sel = st.selectbox("**4. Categoría**", cats, index=0)
         
-        # Filtrado fuerte (sector + tipo + categoría)
+        # === FILTRADO ROBUSTO (ninguna lesión se omite) ===
         df_filtrado = df_maestro.copy()
         
-        # Filtro por región + sector
+        # Filtro por sector (mapa muy amplio para Columna)
         if sector_sel != "Ver todos":
-            df_filtrado = df_filtrado[df_filtrado['Descripción de Lesión'].str.contains(sector_sel, case=False)]
+            if region == "Columna":
+                sector_map = {
+                    "Cervical": r"Cervical|C1|C2|C3|C4|C5|C6|C7|C8|odontoides|apofisis|apófisis|atlas|axis",
+                    "Dorsal": r"Dorsal|D1|D2|D3|D4|D5|D6|D7|D8|D9|D10|D11|D12",
+                    "Lumbar": r"Lumbar|L1|L2|L3|L4|L5",
+                    "Sacro": r"Sacro",
+                    "Coccígeo": r"Coxis|Coccígeo|coccigeo"
+                }
+                kw_sector = sector_map.get(sector_sel, sector_sel)
+                df_filtrado = df_filtrado[df_filtrado['Descripción de Lesión'].str.contains(kw_sector, case=False, regex=True)]
+            else:
+                df_filtrado = df_filtrado[df_filtrado['Descripción de Lesión'].str.contains(sector_sel, case=False)]
         
         # Filtro por tipo
         if tipo_hallazgo == "Osteoarticular y Ligamentario":
@@ -123,7 +131,7 @@ with st.sidebar:
         # Filtro por categoría
         if cat_sel != "Ver todas":
             map_keywords = {
-                "Fracturas Vertebrales": "Fractura",
+                "Fracturas Vertebrales": "Fracturas Vertebrales",
                 "Lesiones Discales y Ligamentarias": "Lesiones Discales",
                 "Limitación Funcional": "Limitación Funcional",
                 "Anquilosis": "Anquilosis",
@@ -151,7 +159,6 @@ with st.sidebar:
                 v_max = df_filtrado[df_filtrado['Descripción de Lesión'] == item_sel]['% de Incapacidad Laboral'].iloc[0]
                 valor_calculado = v_max
                 
-                # Evaluación M/S para nervios
                 es_nervio = any(x in item_sel.lower() for x in ["nervio", "neurológico"]) and "dermatoma" not in item_sel.lower()
                 if es_nervio:
                     st.markdown("---")
@@ -174,7 +181,6 @@ with st.sidebar:
 # =============================================
 # ================= RESULTADOS =================
 # =============================================
-# (el bloque de resultados se mantiene exactamente igual al anterior)
 if st.session_state.pericia:
     st.subheader("**Detalle del dictamen médico**")
     st.info("""
