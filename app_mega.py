@@ -91,12 +91,18 @@ with st.sidebar:
         # 3. Tipo de hallazgo
         tipo_hallazgo = st.radio("**3. Tipo de hallazgo**", ["Osteoarticular y Ligamentario", "Neurológico"])
         
-        # 4. Categoría
+       # 4. Categoría - DINÁMICA SEGÚN SECTOR EN COLUMNA
         if tipo_hallazgo == "Osteoarticular y Ligamentario":
             if region == "Columna":
-                cats = ["Ver todas", "Fracturas Vertebrales", "Lesiones Discales y Ligamentarias", 
-                        "Limitación Funcional", "Anquilosis"]
+                if sector_sel == "Dorsal":
+                    # Dorsal solo tiene fracturas y lesiones discales
+                    cats = ["Ver todas", "Fracturas Vertebrales", "Lesiones Discales y Ligamentarias"]
+                else:
+                    # Resto de sectores de Columna
+                    cats = ["Ver todas", "Fracturas Vertebrales", "Lesiones Discales y Ligamentarias", 
+                            "Limitación Funcional", "Anquilosis"]
             else:
+                # Miembros (MSI, MSD, MII, MID)
                 cats = ["Ver todas", "Meniscos / Ligamentos", "Fracturas / Luxofracturas", 
                         "Anquilosis / Limitaciones", "Amputaciones", "Prótesis"]
         else:
