@@ -104,24 +104,26 @@ with st.sidebar:
         
         cat_sel = st.selectbox("**4. Categoría**", cats, index=0)
         
-        # === FILTRADO CORREGIDO ===
+        # === FILTRADO ESTRICTO ===
         df_filtrado = df_maestro.copy()
         
-        # Filtro por sector (SOLO se aplica en categorías específicas)
+        # FILTRO OBLIGATORIO PARA COLUMNA (lo más importante)
+        if region == "Columna":
+            df_filtrado = df_filtrado[df_filtrado['Apartado'].str.contains("Columna Vertebral", case=False)]
+        
+        # Filtro por sector (solo si no es "Ver todos")
         if sector_sel != "Ver todos":
             if region == "Columna":
-                # Para categorías generales (discales, limitación, anquilosis) NO filtramos por sector
-                if cat_sel not in ["Lesiones Discales y Ligamentarias", "Limitación Funcional", "Anquilosis"]:
-                    sector_map = {
-                        "Cervical": r"Cervical|C1|C2|C3|C4|C5|C6|C7|C8|odontoides|apofisis|apófisis|atlas|axis",
-                        "Dorsal": r"Dorsal|D1|D2|D3|D4|D5|D6|D7|D8|D9|D10|D11|D12",
-                        "Lumbar": r"Lumbar|L1|L2|L3|L4|L5",
-                        "Sacro": r"Sacro",
-                        "Coccígeo": r"Coxis|Coccígeo|coccigeo"
-                    }
-                    kw_sector = sector_map.get(sector_sel, sector_sel)
-                    df_filtrado = df_filtrado[df_filtrado['Descripción de Lesión'].str.contains(kw_sector, case=False, regex=True)]
-            else:  # Extremidades
+                sector_map = {
+                    "Cervical": r"Cervical|C1|C2|C3|C4|C5|C6|C7|C8|odontoides|apofisis|apófisis|atlas|axis",
+                    "Dorsal": r"Dorsal|D1|D2|D3|D4|D5|D6|D7|D8|D9|D10|D11|D12",
+                    "Lumbar": r"Lumbar|L1|L2|L3|L4|L5",
+                    "Sacro": r"Sacro",
+                    "Coccígeo": r"Coxis|Coccígeo|coccigeo"
+                }
+                kw_sector = sector_map.get(sector_sel, sector_sel)
+                df_filtrado = df_filtrado[df_filtrado['Descripción de Lesión'].str.contains(kw_sector, case=False, regex=True)]
+            else:
                 sector_map = {
                     "Cadera": r"Cadera|Pelvis|hemipelvis|sínfisis|sacroilíaca|ilíaco|pubis",
                     "Rodilla": r"Rodilla|menisco|rótula|ligamento cruzado",
