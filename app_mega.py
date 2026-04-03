@@ -111,8 +111,9 @@ with st.sidebar:
         if region == "Columna":
             df_filtrado = df_filtrado[df_filtrado['Apartado'].str.contains("Columna Vertebral", case=False)]
         
-        # Filtro por sector (solo si no es "Ver todos")
-        if sector_sel != "Ver todos":
+        # === FILTRO POR SECTOR ===
+        # Las lesiones generales (discales, limitación, anquilosis) NO se filtran por sector
+        if sector_sel != "Ver todos" and cat_sel not in ["Lesiones Discales y Ligamentarias", "Limitación Funcional", "Anquilosis"]:
             if region == "Columna":
                 sector_map = {
                     "Cervical": r"Cervical|C1|C2|C3|C4|C5|C6|C7|C8|odontoides|apofisis|apófisis|atlas|axis",
