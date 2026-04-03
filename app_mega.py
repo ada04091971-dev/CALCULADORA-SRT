@@ -114,11 +114,12 @@ with st.sidebar:
         if region == "Columna":
             df_filtrado = df_filtrado[df_filtrado['Apartado'].str.contains("Columna Vertebral", case=False)]
         
-        # Filtro por sector (solo para lesiones específicas)
-        if sector_sel != "Ver todos":
+       # === FILTRADO ESTRICTO POR SECTOR EN COLUMNA ===
+        # Excepción para lesiones generales que pueden ocurrir en cualquier nivel
+        if sector_sel != "Ver todos" and cat_sel not in ["Lesiones Discales y Ligamentarias", "Limitación Funcional", "Anquilosis"]:
             if region == "Columna":
-                # Las lesiones generales (discales, luxaciones, limitación, anquilosis) se muestran en TODOS los sectores
-                if cat_sel not in ["Lesiones Discales y Ligamentarias", "Limitación Funcional", "Anquilosis"]:
+                # Las fracturas de apófisis espinosas y transversas se muestran en TODOS los sectores
+                if not df_filtrado['Descripción de Lesión'].str.contains("Apófisis Transversa|Apófisis Espinosa", case=False, regex=True).any():
                     sector_map = {
                         "Cervical": r"Cervical|C1|C2|C3|C4|C5|C6|C7|C8|odontoides|apofisis|apófisis|atlas|axis",
                         "Dorsal": r"Dorsal|D1|D2|D3|D4|D5|D6|D7|D8|D9|D10|D11|D12",
