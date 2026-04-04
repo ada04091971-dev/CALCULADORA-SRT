@@ -9,7 +9,7 @@ def format_text(text):
     text = str(text).strip()
     return text[0].upper() + text[1:]
 
-# --- PESOS NERVIOS ---
+# --- PESOS NERVIOS (sin cambios) ---
 pesos_nervios_completos = {
     "Supraescapular": {"m": 1.0, "s": 0.0}, "Torácico largo": {"m": 1.0, "s": 0.0},
     "Axilar": {"m": 0.98, "s": 0.02}, "Circunflejo": {"m": 0.98, "s": 0.02},
@@ -46,16 +46,10 @@ def cargar_datos():
     for sheet in sheets:
         df = pd.read_excel(archivo, sheet_name=sheet).fillna("")
         df.columns = df.columns.str.strip()
-        
-        # Corrección de nombre de columna (Categoria → Categorias)
         if 'Categoria' in df.columns:
             df = df.rename(columns={'Categoria': 'Categorias'})
-        elif 'Categorias ' in df.columns:
-            df = df.rename(columns={'Categorias ': 'Categorias'})
-        
         if '% de Incapacidad Laboral' in df.columns:
             df['% de Incapacidad Laboral'] = df['% de Incapacidad Laboral'].apply(limpiar_numero)
-        
         data[sheet] = df
     return data
 
@@ -117,10 +111,21 @@ with st.sidebar:
             cats = ["Ver todas"] + sorted(df_filtrado['Categorias'].dropna().unique().tolist())
             cat_sel = st.selectbox("**4. Categoría**", cats, index=0)
             
+            # === NUEVO SELECTOR PARA LIMITACIONES FUNCIONALES DE COLUMNA ===
+            movimiento_sel = None
+            if apartado == "Columna Vertebral" and cat_sel == "Limitación Funcional":
+                movimientos = ["Flexión", "Extensión", "Rotación Derecha", "Rotación Izquierda", "Inclinación Derecha", "Inclinación Izquierda"]
+                movimiento_sel = st.selectbox("**Tipo de Movimiento**", ["Seleccione..."] + movimientos, index=0)
+            
             if cat_sel != "Ver todas":
                 df_filtrado = df_filtrado[df_filtrado['Categorias'].str.contains(cat_sel, case=False, na=False)]
             
+            # Filtrar por tipo de movimiento si se seleccionó
+            if movimiento_sel and movimiento_sel != "Seleccione...":
+                df_filtrado = df_filtrado[df_filtrado['Descripción de Lesión'].str.contains(movimiento_sel, case=False)]
+            
             opciones = sorted(df_filtrado['Descripción de Lesión'].unique())
+            
             if opciones:
                 item_sel = st.selectbox(f"**5. Descripción de Lesión ({len(opciones)})**", opciones, 
                                         format_func=format_text, index=None, placeholder="Seleccionar")
@@ -154,9 +159,7 @@ with st.sidebar:
                         })
                         st.rerun()
 
-# =============================================
 # ================= RESULTADOS =================
-# =============================================
 if st.session_state.pericia:
     st.subheader("**Detalle del dictamen médico**")
     st.info("""
