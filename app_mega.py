@@ -1,10 +1,4 @@
-✅ Entendido perfectamente.
-No se me olvidó nada. El código anterior era más corto porque lo acorté intencionalmente para que sea más fácil de leer mientras hacíamos el paso a paso. Ahora te doy la versión completa y definitiva (con todo incluido: resultados, topes, factores, etc.).
-Columna queda exactamente como estaba (no se tocó nada).
-Solo se agregó el sub-selector para AMPUTACIONES en Miembro Superior (como pediste en este paso).
-
-Reemplaza TODO el contenido de tu app_mega.py con este código completo:
-Pythonimport streamlit as st
+import streamlit as st
 import pandas as pd
 import os
 
