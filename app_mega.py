@@ -1,4 +1,4 @@
-mport streamlit as st
+import streamlit as st
 import pandas as pd
 import os
 
@@ -16,7 +16,7 @@ def cargar_datos():
         st.error("No se encontró calculadora_final_srt.xlsx")
         st.stop()
 
-    # Diagnóstico (puedes borrarlo después si querés)
+    # Diagnóstico (puedes borrarlo después)
     with pd.ExcelFile(archivo) as xls:
         st.sidebar.info(f"Hojas detectadas: {xls.sheet_names}")
 
@@ -34,7 +34,7 @@ def cargar_datos():
         "Neurologia": pd.read_excel(archivo, sheet_name="Neurologia").fillna(""),
     }
 
-    # Limpiar nombres de columnas y porcentajes
+    # Limpiar columnas y porcentajes
     def limpiar(val):
         try:
             if isinstance(val, str):
@@ -84,7 +84,7 @@ with st.sidebar:
 
     categoria = st.selectbox("**4. Categoría**", cats)
 
-    # Nivel / Parte anatómica (ahora selecciona la hoja correcta)
+    # Nivel / Parte anatómica
     if apartado == "Columna Vertebral":
         niveles = ["Cervical", "Dorsal", "Lumbar", "Sacrococcigea", "Coxis"]
     elif apartado == "Miembro Superior":
@@ -106,14 +106,12 @@ with st.sidebar:
     elif apartado == "Miembro Inferior":
         sheet_name = "Miembro Inferior Derecho" if lateralidad == "Derecho" else "Miembro Inferior Izquierdo"
         df_fil = sheets.get(sheet_name, pd.DataFrame())
-    else:  # Neurologia
+    else:
         df_fil = sheets.get("Neurologia", pd.DataFrame())
 
-    # Filtro por categoría
     if categoria != "Ver todas":
         df_fil = df_fil[df_fil['Descripción de Lesión'].str.contains(categoria, case=False, na=False)]
 
-    # Opciones finales
     opciones = sorted(df_fil['Descripción de Lesión'].dropna().unique())
 
     if opciones:
