@@ -8,7 +8,7 @@ def format_text(text):
     if not text: return ""
     return str(text).strip().capitalize()
 
-# ====================== CARGA DE DATOS (nueva estructura) ======================
+# ====================== CARGA DE DATOS (nombres EXACTOS) ======================
 @st.cache_data
 def cargar_datos():
     archivo = "calculadora_final_srt.xlsx"
@@ -16,11 +16,10 @@ def cargar_datos():
         st.error("No se encontró calculadora_final_srt.xlsx")
         st.stop()
 
-    # Diagnóstico (puedes borrarlo después)
+    # Diagnóstico (lo ves en la sidebar)
     with pd.ExcelFile(archivo) as xls:
         st.sidebar.info(f"Hojas detectadas: {xls.sheet_names}")
 
-    # Cargamos todas las hojas que existen ahora
     sheets = {
         "Cervical": pd.read_excel(archivo, sheet_name="Cervical").fillna(""),
         "Dorsal": pd.read_excel(archivo, sheet_name="Dorsal").fillna(""),
@@ -99,15 +98,14 @@ with st.sidebar:
     # ====================== FILTRADO ======================
     if apartado == "Columna Vertebral":
         sheet_name = nivel
-        df_fil = sheets.get(sheet_name, pd.DataFrame())
     elif apartado == "Miembro Superior":
         sheet_name = "Miembros Superior Derecho" if lateralidad == "Derecho" else "Miembro superior Izquierdo"
-        df_fil = sheets.get(sheet_name, pd.DataFrame())
     elif apartado == "Miembro Inferior":
         sheet_name = "Miembro Inferior Derecho" if lateralidad == "Derecho" else "Miembro Inferior Izquierdo"
-        df_fil = sheets.get(sheet_name, pd.DataFrame())
     else:
-        df_fil = sheets.get("Neurologia", pd.DataFrame())
+        sheet_name = "Neurologia"
+
+    df_fil = sheets.get(sheet_name, pd.DataFrame())
 
     if categoria != "Ver todas":
         df_fil = df_fil[df_fil['Descripción de Lesión'].str.contains(categoria, case=False, na=False)]
