@@ -8,7 +8,6 @@ st.set_page_config(page_title="Calculadora integral SRT", layout="wide", page_ic
 def format_text(text):
     if not text: return ""
     text = str(text).strip()
-    # Pone la primera letra en mayúscula y preserva el resto (C1, S1, etc.)
     return text[0].upper() + text[1:]
 
 # --- Diccionario de Pesos Motor/Sensitivo (Decreto 549/25) ---
@@ -61,37 +60,26 @@ if 'pericia' not in st.session_state:
 with st.sidebar:
     st.header("**Carga de hallazgos**")
     
-    # 1. REGIÓN PRINCIPAL
     region_madre = st.selectbox("**1. Región**", ["Columna", "Miembro Superior", "Miembro Inferior"], index=None)
     
     if region_madre:
-        # 2. SUB-REGIÓN (Lateralidad o Nivel)
         if region_madre == "Columna":
             sub = st.selectbox("**2. Nivel vertebral**", ["Cervical", "Dorsal", "Lumbar", "Sacrococcigea", "Coxis"], index=None)
             hoja_nombre = sub
-        elif region_madre == "Miembro Superior":
-            sub = st.selectbox("**2. Lateralidad**", ["Derecho", "Izquierdo"], index=None)
-            hoja_nombre = f"Miembro Superior {sub}"
         else:
             sub = st.selectbox("**2. Lateralidad**", ["Derecho", "Izquierdo"], index=None)
-            hoja_nombre = f"Miembro Inferior {sub}"
+            hoja_nombre = f"{region_madre} {sub}"
             
         if sub:
-            # 3. HALLAZGO (Osteo vs Neuro)
             hallazgo = st.radio("**3. Tipo de hallazgo**", ["Osteoarticular / Goniometría", "Neurológico / Radicular"])
             
-            # Carga de datos dinámica
             if "Neurológico" in hallazgo:
                 df_final = cargar_hoja("Neurologia")
-                # Filtro inteligente para que en Neurología solo aparezca lo que corresponde a la región
-                if region_madre == "Columna": kw_neuro = sub
-                elif region_madre == "Miembro Superior": kw_neuro = "Superior|Cervical|Plexo Braquial"
-                else: kw_neuro = "Inferior|Lumbar|Sacro|Plexo Lumbar"
+                kw_neuro = sub if region_madre == "Columna" else ("Superior" if "Superior" in region_madre else "Inferior")
                 df_final = df_final[df_final['Apartado'].str.contains(kw_neuro, case=False, na=False)]
             else:
                 df_final = cargar_hoja(hoja_nombre)
 
-            # 4. CATEGORÍA (Sacada de la columna 'Categorias' o 'Apartado')
             col_cat = 'Categorias' if 'Categorias' in df_final.columns else 'Apartado'
             if not df_final.empty:
                 categorias = ["Ver todas"] + sorted(df_final[col_cat].unique().tolist())
@@ -101,7 +89,14 @@ with st.sidebar:
                 if cat_sel != "Ver todas":
                     df_items = df_items[df_items[col_cat] == cat_sel]
                 
-                # 5. SELECCIÓN FINAL
+                # --- NUEVA LÓGICA DE AGRUPACIÓN POR MOVIMIENTO ---
+                es_columna_funcional = any(x in cat_sel for x in ["Anquilosis", "Limitación"]) and region_madre == "Columna"
+                
+                if es_columna_funcional:
+                    tipo_mov = st.selectbox("**Tipo de movimiento**", ["Flexión", "Extensión", "Inclinación", "Rotación"], index=None, placeholder="Seleccionar")
+                    if tipo_mov:
+                        df_items = df_items[df_items['Descripción de Lesión'].str.contains(tipo_mov, case=False, na=False)]
+                
                 opciones = sorted(df_items['Descripción de Lesión'].unique())
                 if opciones:
                     item_sel = st.selectbox(f"**5. Secuela específica ({len(opciones)})**", opciones, format_func=format_text, index=None)
@@ -110,7 +105,6 @@ with st.sidebar:
                         v_max = df_items[df_items['Descripción de Lesión'] == item_sel]['% de Incapacidad Laboral'].iloc[0]
                         valor_calc = v_max
                         
-                        # Evaluación M/S si es Nervio Periférico
                         if "Nervio" in item_sel and "Dermatoma" not in item_sel:
                             st.markdown("---")
                             st.write("**Evaluación funcional (M/S)**")
@@ -127,6 +121,8 @@ with st.sidebar:
                         if st.button("**AGREGAR**"):
                             st.session_state.pericia.append({"reg": hoja_nombre, "desc": item_sel, "val": round(valor_calc, 2)})
                             st.rerun()
+                else:
+                    st.warning("No hay coincidencias para este movimiento.")
 
 # --- Resultados ---
 if st.session_state.pericia:
@@ -138,9 +134,8 @@ if st.session_state.pericia:
         c2.write(f"{format_text(p['desc'])} ({p['val']}%)")
         if c3.button("🗑️", key=f"del_{i}"): st.session_state.pericia.pop(i); st.rerun()
         
-        # Lógica de topes
         if "Cervical" in p['reg'] or "Cervical" in p['desc']: llave = "Columna Cervical"
-        elif "Columna" in p['reg']: llave = "Columna Dorsolumbar"
+        elif any(x in p['reg'] for x in ["Lumbar", "Dorsal", "Sacro"]): llave = "Columna Dorsolumbar"
         elif "Superior" in p['reg']: llave = "Miembro Superior"
         else: llave = "Miembro Inferior"
         sumas_seg[llave] = sumas_seg.get(llave, 0) + p['val']
