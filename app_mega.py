@@ -225,5 +225,3 @@ if st.session_state.pericia:
     if st.button("🚨 **BORRAR TODO EL DICTAMEN**"):
         st.session_state.pericia = []
         st.rerun()
-
-st.info("✅ Calculadora actualizada con la nueva estructura de hojas por sector.")
