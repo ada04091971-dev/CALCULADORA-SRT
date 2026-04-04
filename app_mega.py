@@ -1,4 +1,13 @@
-import streamlit as st
+✅ Corregido.
+Ahora los selectores intermedios aparecen correctamente en Miembro Superior y Miembro Inferior para:
+
+Amputaciones → selector “Nivel / Parte anatómica”
+Anquilosis y Limitación Funcional → selector “Articulación” (y en Muñeca → tipo de movimiento)
+
+La lógica de Columna se mantiene exactamente como estaba (funciona perfecto).
+
+Reemplaza TODO el contenido de tu app_mega.py con este código final:
+Pythonimport streamlit as st
 import pandas as pd
 import os
 
@@ -119,17 +128,17 @@ with st.sidebar:
             movimiento_columna = None
             sub_filtro_ext = None
 
-            # COLumna - Limitación Funcional (Cervical y Dorsolumbar)
+            # COLUMNA - Limitación Funcional (Cervical y Dorsolumbar)
             if apartado == "Columna Vertebral" and "Limitación Funcional" in cat_sel:
                 movimientos = ["Flexión", "Extensión", "Rotación Derecha", "Rotación Izquierda", "Inclinación Derecha", "Inclinación Izquierda"]
                 movimiento_columna = st.selectbox("**Tipo de Movimiento**", ["Seleccione..."] + movimientos, index=0)
 
             # EXTREMIDADES - Amputaciones, Anquilosis y Limitación Funcional
             if apartado in ["Miembro Superior", "Miembro Inferior"]:
-                if cat_sel == "Amputaciones":
+                if "Amputaciones" in cat_sel:
                     sub_filtro_ext = st.selectbox("**Nivel / Parte anatómica**", 
                                                 ["Ver todas", "Hombro/Cintura", "Brazo", "Antebrazo", "Muñeca", "Mano", "Pulgar", "Dedos"])
-                elif cat_sel in ["Anquilosis", "Limitación Funcional"]:
+                elif any(x in cat_sel for x in ["Anquilosis", "Limitación Funcional"]):
                     artic = st.selectbox("**Articulación**", ["Ver todas", "Hombro", "Codo", "Muñeca", "Rodilla", "Cadera", "Tobillo", "Pie"])
                     sub_filtro_ext = artic
                     if artic == "Muñeca":
