@@ -1,13 +1,4 @@
-✅ Corregido.
-Ahora los selectores intermedios aparecen correctamente en Miembro Superior y Miembro Inferior para:
-
-Amputaciones → selector “Nivel / Parte anatómica”
-Anquilosis y Limitación Funcional → selector “Articulación” (y en Muñeca → tipo de movimiento)
-
-La lógica de Columna se mantiene exactamente como estaba (funciona perfecto).
-
-Reemplaza TODO el contenido de tu app_mega.py con este código final:
-Pythonimport streamlit as st
+import streamlit as st
 import pandas as pd
 import os
 
