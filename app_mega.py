@@ -35,25 +35,37 @@ escalas_ms = {
 def cargar_datos():
     archivo = "calculadora_final_srt.xlsx"
     if not os.path.exists(archivo):
-        archivos_xlsx = [f for f in os.listdir(".") if f.endswith(".xlsx")]
-        archivo = archivos_xlsx[0] if archivos_xlsx else ""
-    if not archivo: 
+        archivos = [f for f in os.listdir(".") if f.endswith(".xlsx")]
+        archivo = archivos[0] if archivos else ""
+    if not archivo:
         st.error("No se encontró el archivo calculadora_final_srt.xlsx")
         st.stop()
-    df = pd.read_excel(archivo, sheet_name="Hoja1").fillna("")
-    df.columns = df.columns.str.strip()
-    
+
+    df_main = pd.read_excel(archivo, sheet_name="Lesiones ").fillna("")
+    df_main.columns = df_main.columns.str.strip()
+
+    df_mid = pd.read_excel(archivo, sheet_name="Miembro Inferior Derecho").fillna("")
+    df_mid.columns = df_mid.columns.str.strip()
+
+    df_mii = pd.read_excel(archivo, sheet_name="Miembro Inferior Izquierdo").fillna("")
+    df_mii.columns = df_mii.columns.str.strip()
+
     def limpiar_numero(val):
         try:
-            if isinstance(val, str): val = val.replace('%', '').replace(',', '.')
+            if isinstance(val, str):
+                val = val.replace('%', '').replace(',', '.')
             n = float(val)
             return n * 100 if 0 < n < 1 else n
-        except: return 0.0
-    if '% de Incapacidad Laboral' in df.columns:
-        df['% de Incapacidad Laboral'] = df['% de Incapacidad Laboral'].apply(limpiar_numero)
-    return df
+        except:
+            return 0.0
 
-df_maestro = cargar_datos()
+    for df in [df_main, df_mid, df_mii]:
+        if '% de Incapacidad Laboral' in df.columns:
+            df['% de Incapacidad Laboral'] = df['% de Incapacidad Laboral'].apply(limpiar_numero)
+
+    return df_main, df_mid, df_mii
+
+df_main, df_mid, df_mii = cargar_datos()
 
 def balthazard(lista):
     lista = sorted([x for x in lista if x > 0], reverse=True)
@@ -83,7 +95,7 @@ with st.sidebar:
             sectores = ["Cervical", "Dorsal", "Lumbar", "Sacro", "Coccígeo"]
         elif region in ["MSI", "MSD"]:
             sectores = ["Hombro", "Codo", "Muñeca", "Mano", "Brazo", "Antebrazo"]
-        else:
+        else:  # MII o MID
             sectores = ["Cadera", "Rodilla", "Tobillo", "Pie", "Pierna", "Muslo", "Pelvis"]
         
         sector_sel = st.selectbox("**2. Sector anatómico**", ["Ver todos"] + sectores, index=0)
@@ -107,13 +119,17 @@ with st.sidebar:
         
         cat_sel = st.selectbox("**4. Categoría**", cats, index=0)
         
-        # === FILTRADO FINAL LIMPIO ===
-        df_filtrado = df_maestro.copy()
-        
+        # === FILTRADO FINAL ===
         if region == "Columna":
-            df_filtrado = df_filtrado[df_filtrado['Apartado'].str.contains("Columna Vertebral", case=False)]
+            df_filtrado = df_main[df_main['Apartado'].str.contains("Columna Vertebral", case=False)].copy()
+        elif region in ["MSI", "MSD"]:
+            df_filtrado = df_main[df_main['Apartado'].str.contains("Miembro Superior", case=False)].copy()
+        elif region == "MID":
+            df_filtrado = df_mid.copy()
+        else:  # MII
+            df_filtrado = df_mii.copy()
         
-        # Filtro por sector (solo para lesiones específicas)
+        # Filtro por sector (solo lesiones específicas)
         if sector_sel != "Ver todos":
             if region == "Columna":
                 # Excepción: lesiones generales se muestran en TODOS los sectores
@@ -127,6 +143,9 @@ with st.sidebar:
                     }
                     kw_sector = sector_map.get(sector_sel, sector_sel)
                     df_filtrado = df_filtrado[df_filtrado['Descripción de Lesión'].str.contains(kw_sector, case=False, regex=True)]
+            elif region in ["MII", "MID"]:
+                # Usamos la columna "Categorias" que creaste
+                df_filtrado = df_filtrado[df_filtrado['Categorias'].str.contains(sector_sel, case=False, na=False)]
         
         # Filtro por tipo
         if tipo_hallazgo == "Osteoarticular y Ligamentario":
