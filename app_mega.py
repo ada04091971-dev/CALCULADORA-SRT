@@ -10,7 +10,7 @@ def format_text(text):
     return text[0].upper() + text[1:]
 
 # --- PESOS NERVIOS ---
-pesos_nervios_completos = { ... }  # (mismo diccionario que tenías)
+pesos_nervios_completos = { ... }  # (mantengo tu diccionario completo)
 
 escalas_ms = { ... }  # (igual)
 
@@ -98,26 +98,35 @@ with st.sidebar:
             cats = ["Ver todas"] + sorted(df_filtrado['Categorias'].dropna().unique().tolist())
             cat_sel = st.selectbox("**4. Categoría**", cats, index=0)
             
-            # === SELECTORES INTERMEDIOS PARA REDUCIR SCROLL (solo extremidades) ===
-            sub_filtro = None
+            # ====================== SELECTORES INTERMEDIOS ======================
+            # 1. Columna - Limitación Funcional
+            movimiento_columna = None
+            if apartado == "Columna Vertebral" and cat_sel == "Limitación Funcional":
+                movimientos = ["Flexión", "Extensión", "Rotación Derecha", "Rotación Izquierda", "Inclinación Derecha", "Inclinación Izquierda"]
+                movimiento_columna = st.selectbox("**Tipo de Movimiento**", ["Seleccione..."] + movimientos, index=0)
+            
+            # 2. Extremidades - Amputaciones, Anquilosis y Limitación Funcional
+            sub_filtro_ext = None
             if apartado in ["Miembro Superior", "Miembro Inferior"]:
                 if cat_sel == "Amputaciones":
-                    sub_filtro = st.selectbox("**Nivel / Parte anatómica**", 
-                                            ["Ver todas", "Hombro/Cintura", "Brazo", "Antebrazo", "Muñeca", "Mano", "Pulgar", "Dedos"])
+                    sub_filtro_ext = st.selectbox("**Nivel / Parte anatómica**", 
+                                                ["Ver todas", "Hombro/Cintura", "Brazo", "Antebrazo", "Muñeca", "Mano", "Pulgar", "Dedos"])
                 elif cat_sel in ["Anquilosis", "Limitación Funcional"]:
-                    artic = st.selectbox("**Articulación**", 
-                                       ["Ver todas", "Hombro", "Codo", "Muñeca", "Rodilla", "Cadera", "Tobillo", "Pie"])
-                    sub_filtro = artic
+                    artic = st.selectbox("**Articulación**", ["Ver todas", "Hombro", "Codo", "Muñeca", "Rodilla", "Cadera", "Tobillo", "Pie"])
+                    sub_filtro_ext = artic
                     if artic == "Muñeca":
-                        mov = st.selectbox("**Tipo de movimiento**", 
-                                         ["Ver todas", "Flexión Palmar", "Flexión Dorsal", "Desviación Radial", "Desviación Cubital"])
-                        sub_filtro = mov if mov != "Ver todas" else artic
+                        mov = st.selectbox("**Tipo de movimiento**", ["Ver todas", "Flexión Palmar", "Flexión Dorsal", "Desviación Radial", "Desviación Cubital"])
+                        sub_filtro_ext = mov if mov != "Ver todas" else artic
             
+            # ====================== FILTRADO FINAL ======================
             if cat_sel != "Ver todas":
                 df_filtrado = df_filtrado[df_filtrado['Categorias'].str.contains(cat_sel, case=False, na=False)]
             
-            if sub_filtro and sub_filtro != "Ver todas":
-                df_filtrado = df_filtrado[df_filtrado['Descripción de Lesión'].str.contains(sub_filtro, case=False)]
+            if movimiento_columna and movimiento_columna != "Seleccione...":
+                df_filtrado = df_filtrado[df_filtrado['Descripción de Lesión'].str.contains(movimiento_columna, case=False)]
+            
+            if sub_filtro_ext and sub_filtro_ext != "Ver todas":
+                df_filtrado = df_filtrado[df_filtrado['Descripción de Lesión'].str.contains(sub_filtro_ext, case=False)]
             
             opciones = sorted(df_filtrado['Descripción de Lesión'].unique())
             if opciones:
@@ -154,7 +163,7 @@ with st.sidebar:
                         st.rerun()
 
 # ================= RESULTADOS =================
-# (mismo bloque que la versión anterior)
+# (mismo bloque que antes - se mantiene intacto)
 
 if st.session_state.pericia:
     st.subheader("**Detalle del dictamen médico**")
