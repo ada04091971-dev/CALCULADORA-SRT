@@ -1,8 +1,4 @@
-✅ Entendido. El problema está solucionado.
-El botón AGREGAR no hacía nada porque en la versión anterior faltaba el bloque completo de resultados (el panel que muestra el detalle, los topes, el cálculo Balthazard y el ILP final).
-Aquí tienes el código completo y definitivo de app_mega.py.
-Reemplaza TODO el contenido de tu archivo con esto:
-Pythonimport streamlit as st
+import streamlit as st
 import pandas as pd
 import os
 
