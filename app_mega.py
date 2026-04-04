@@ -29,7 +29,7 @@ def balthazard(lista):
     return round(total, 2)
 
 # --- Interfaz principal ---
-st.title("🧮 **Mega Calculadora SRT: Edición Profesional Final**")
+st.title("🧮 **Mega Calculadora SRT: Edición Profesional Estable**")
 st.markdown("---")
 
 if 'pericia' not in st.session_state:
@@ -38,44 +38,38 @@ if 'pericia' not in st.session_state:
 with st.sidebar:
     st.header("**Carga de hallazgos**")
     
-    # 1. REGIÓN MADRE
+    # 1. REGIÓN
     region_madre = st.selectbox("**1. Región**", ["Columna", "Miembro Superior", "Miembro Inferior"], index=None)
     
     if region_madre:
-        # 2. LATERALIDAD (Solo para miembros)
-        lat = ""
-        if region_madre != "Columna":
+        # 2. SECTOR O LATERALIDAD
+        if region_madre == "Columna":
+            sector_col = st.selectbox("**2. Nivel vertebral**", ["Cervical", "Dorsal", "Lumbar", "Sacrococcigea", "Coxis"], index=None)
+            hoja_nombre = sector_col
+            sector_anat = sector_col
+        else:
             lat = st.selectbox("**2. Lateralidad**", ["Derecho", "Izquierdo"], index=None)
-        
-        # 3. SECTOR ANATÓMICO (Orden Descendente)
-        sectores_map = {
-            "Columna": ["Cervical", "Dorsal", "Lumbar", "Sacrococcigea", "Coxis"],
-            "Miembro Superior": ["Hombro", "Brazo", "Codo", "Antebrazo", "Muñeca", "Mano", "Dedos"],
-            "Miembro Inferior": ["Cadera", "Muslo", "Rodilla", "Pierna", "Tobillo", "Pie", "Dedos"]
-        }
-        
-        sector = st.selectbox("**3. Sector anatómico**", sectores_map[region_madre], index=None)
-        
-        if sector and (region_madre == "Columna" or lat):
-            # 4. TIPO DE HALLAZGO
+            sectores_m = ["Hombro", "Brazo", "Codo", "Antebrazo", "Muñeca", "Mano", "Dedos"] if "Superior" in region_madre else ["Cadera", "Muslo", "Rodilla", "Pierna", "Tobillo", "Pie", "Dedos"]
+            sector_anat = st.selectbox("**3. Sector anatómico**", sectores_m, index=None)
+            hoja_nombre = f"{region_madre} {lat}"
+            
+        if sector_anat and (region_madre == "Columna" or lat):
+            # 3. HALLAZGO
             hallazgo = st.radio("**4. Tipo de hallazgo**", ["Osteoarticular / Goniometría", "Neurológico / Radicular"])
             
-            # Carga de la hoja correcta
-            hoja_a_cargar = sector if region_madre == "Columna" else f"{region_madre} {lat}"
-            df_final = cargar_hoja("Neurologia" if "Neurológico" in hallazgo else hoja_a_cargar)
+            df_final = cargar_hoja("Neurologia" if "Neurológico" in hallazgo else hoja_nombre)
 
             if not df_final.empty:
-                # Filtrar Neurología por la región/sector
+                # FILTRO DE SEGURIDAD (Para no borrar Hernias ni Apófisis en Columna)
                 if "Neurológico" in hallazgo:
-                    kw_neuro = sector if region_madre == "Columna" else ("Superior" if "Superior" in region_madre else "Inferior")
-                    df_final = df_final[df_final['Apartado'].str.contains(kw_neuro, case=False, na=False)]
-                else:
-                    # Filtro anatómico en la hoja de miembros (para reducir las 30 categorías)
-                    mask = df_final['Categoría'].str.contains(sector, case=False, na=False) | \
-                           df_final['Descripción de lesión'].str.contains(sector, case=False, na=False)
-                    df_final = df_final[mask]
+                    kw = sector_anat if region_madre == "Columna" else ("Superior" if "Superior" in region_madre else "Inferior")
+                    df_final = df_final[df_final['Apartado'].str.contains(kw, case=False, na=False)]
+                elif region_madre != "Columna":
+                    # Solo filtramos por sector (Hombro, Rodilla) si NO es columna
+                    df_final = df_final[df_final['Categoría'].str.contains(sector_anat, case=False, na=False) | 
+                                       df_final['Descripción de lesión'].str.contains(sector_anat, case=False, na=False)]
 
-                # 5. CATEGORÍA
+                # 4. CATEGORÍA
                 categorias = ["Ver todas"] + sorted(df_final['Categoría'].unique().tolist())
                 cat_sel = st.selectbox("**5. Categoría**", categorias)
                 
@@ -83,8 +77,8 @@ with st.sidebar:
                 if cat_sel != "Ver todas":
                     df_items = df_items[df_items['Categoría'] == cat_sel]
                 
-                # 6. FILTRO DE MOVIMIENTO (Para goniometría)
-                if any(x in str(cat_sel) for x in ["Anquilosis", "Limitación", "Goniometría"]):
+                # 5. MOVIMIENTOS (Solo si es goniometría)
+                if any(x in str(cat_sel) for x in ["Anquilosis", "Limitación"]):
                     movs_ref = ["Flexión", "Extensión", "Inclinación", "Rotación", "Abducción", "Aducción", "Pronación", "Supinación"]
                     opc_mov = [m for m in movs_ref if df_items['Descripción de lesión'].str.contains(m, case=False).any()]
                     if opc_mov:
@@ -92,23 +86,15 @@ with st.sidebar:
                         if tipo_mov:
                             df_items = df_items[df_items['Descripción de lesión'].str.contains(tipo_mov, case=False)]
 
-                # 7. SELECCIÓN FINAL
+                # 6. SELECCIÓN FINAL
                 opciones = sorted(df_items['Descripción de lesión'].unique())
                 if opciones:
                     item_sel = st.selectbox(f"**7. Secuela específica ({len(opciones)})**", opciones, format_func=format_text, index=None)
-                    
                     if item_sel:
-                        fila = df_items[df_items['Descripción de lesión'] == item_sel]
-                        valor = fila['% de incapacidad laboral'].iloc[0]
-                        
+                        valor = df_items[df_items['Descripción de lesión'] == item_sel]['% de incapacidad laboral'].iloc[0]
                         st.success(f"**Valor Baremo: {valor}%**")
-                        
                         if st.button("**AGREGAR A LA PERICIA**"):
-                            st.session_state.pericia.append({
-                                "reg": sector if region_madre == "Columna" else f"{sector} {lat}",
-                                "desc": item_sel,
-                                "val": valor
-                            })
+                            st.session_state.pericia.append({"reg": sector_anat if region_madre == "Columna" else f"{sector_anat} {lat}", "desc": item_sel, "val": valor})
                             st.rerun()
 
 # --- Resultados ---
@@ -122,13 +108,13 @@ if st.session_state.pericia:
         c2.write(f"{format_text(p['desc'])} ({p['val']}%)")
         if c3.button("🗑️", key=f"del_{i}"): st.session_state.pericia.pop(i); st.rerun()
         
-        # Agrupación de topes
+        # Topes (Decreto 549/25)
         desc_u = p['desc'].upper()
-        if any(x in p['reg'] or x in desc_u for x in ["CERVICAL", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8"]):
+        if "CERVICAL" in p['reg'] or any(x in desc_u for x in ["CERVICAL", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8"]):
             llave = "Columna cervical"
-        elif any(x in p['reg'] for x in ["Dorsal", "Lumbar", "Sacro", "Coxis"]):
+        elif any(x in p['reg'] for x in ["Lumbar", "Dorsal", "Sacro", "Coxis"]) or "COLUMNA" in p['reg'].upper():
             llave = "Columna dorsolumbar"
-        elif "Hombro" in p['reg'] or "Codo" in p['reg'] or "Mano" in p['reg'] or "Superior" in p['reg']:
+        elif "SUPERIOR" in p['reg'].upper() or any(x in p['reg'] for x in ["Hombro", "Codo", "Mano"]):
             llave = "Miembro superior"
         else:
             llave = "Miembro inferior"
