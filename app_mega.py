@@ -10,9 +10,26 @@ def format_text(text):
     return text[0].upper() + text[1:]
 
 # --- PESOS NERVIOS ---
-pesos_nervios_completos = { ... }  # (el diccionario completo que ya tenías)
+pesos_nervios_completos = {
+    "Supraescapular": {"m": 1.0, "s": 0.0}, "Torácico largo": {"m": 1.0, "s": 0.0},
+    "Axilar": {"m": 0.98, "s": 0.02}, "Circunflejo": {"m": 0.98, "s": 0.02},
+    "Radial": {"m": 0.90, "s": 0.10}, "Músculo cutáneo": {"m": 0.90, "s": 0.10},
+    "Interóseo posterior": {"m": 1.0, "s": 0.0}, "Antebraquial cutáneo medial": {"m": 0.0, "s": 1.0},
+    "Mediano": {"m": 0.70, "s": 0.30}, "Interóseo anterior": {"m": 1.0, "s": 0.0},
+    "Cubital": {"m": 0.70, "s": 0.30}, "Digital": {"m": 0.0, "s": 1.0}, "Colateral": {"m": 0.0, "s": 1.0},
+    "Crural": {"m": 0.80, "s": 0.20}, "Femoral": {"m": 0.80, "s": 0.20}, "Obturador": {"m": 1.0, "s": 0.0},
+    "Femorocutáneo": {"m": 0.0, "s": 1.0}, "Ciático mayor": {"m": 0.70, "s": 0.30},
+    "Peroneo común": {"m": 0.70, "s": 0.30}, "Ciático poplíteo externo": {"m": 0.70, "s": 0.30},
+    "Peroneo superficial": {"m": 0.0, "s": 1.0}, "Tibial anterior": {"m": 0.75, "s": 0.25},
+    "Ciático poplíteo interno": {"m": 0.60, "s": 0.40}, "Tibial": {"m": 0.60, "s": 0.40},
+    "Tibial posterior": {"m": 0.50, "s": 0.50}, "Safeno": {"m": 0.0, "s": 1.0},
+    "Sural": {"m": 0.0, "s": 1.0}, "Plantar": {"m": 0.30, "s": 0.70}
+}
 
-escalas_ms = { ... }  # (igual que antes)
+escalas_ms = {
+    "Grado 5 (Normal - 0%)": 0.0, "Grado 4 (Leve - 20%)": 0.2, "Grado 3 (Moderado - 50%)": 0.5,
+    "Grado 2 (Grave - 80%)": 0.8, "Grado 1 (Severo - 90%)": 0.9, "Grado 0 (Total - 100%)": 1.0
+}
 
 @st.cache_data
 def cargar_datos():
@@ -74,7 +91,6 @@ with st.sidebar:
         apartado = st.selectbox("**2. Apartado**", apartados, index=None, placeholder="Seleccionar")
         
         if apartado:
-            # 3. Sector o Lateralidad
             if apartado == "Columna Vertebral":
                 sector = st.selectbox("**3. Sector anatómico**", 
                                     ["Cervical", "Dorsal", "Lumbar", "Sacrococcigea", "Coxis"], 
@@ -87,7 +103,6 @@ with st.sidebar:
                 else:
                     sheet_name = "Miembro Inferior  Derecho" if lateralidad == "Derecho" else "Miembro Inferior Izquierdo"
             
-            # PROTECCIÓN: solo continuar si ya se eligió el sector
             if apartado == "Columna Vertebral" and (sector is None or sector == "Seleccionar"):
                 st.info("Seleccione un sector anatómico para continuar")
                 st.stop()
@@ -102,9 +117,9 @@ with st.sidebar:
             cats = ["Ver todas"] + sorted(df_filtrado['Categorias'].dropna().unique().tolist())
             cat_sel = st.selectbox("**4. Categoría**", cats, index=0)
             
-            # Selector extra para limitaciones funcionales de columna
+            # === SELECTOR DE MOVIMIENTO PARA LIMITACIONES FUNCIONALES ===
             movimiento_sel = None
-            if apartado == "Columna Vertebral" and cat_sel == "Limitación Funcional":
+            if apartado == "Columna Vertebral" and "Limitación Funcional" in cat_sel:
                 movimientos = ["Flexión", "Extensión", "Rotación Derecha", "Rotación Izquierda", "Inclinación Derecha", "Inclinación Izquierda"]
                 movimiento_sel = st.selectbox("**Tipo de Movimiento**", ["Seleccione..."] + movimientos, index=0)
             
@@ -149,11 +164,9 @@ with st.sidebar:
                         st.rerun()
 
 # ================= RESULTADOS =================
-# (el bloque de resultados es el mismo que la versión anterior)
-
 if st.session_state.pericia:
     st.subheader("**Detalle del dictamen médico**")
-    st.info("**Regla aplicada según Decreto 549/25**  • Dentro de cada región → suma aritmética + tope  • Entre regiones → Capacidad Restante (Balthazard)")
+    st.info("**Regla aplicada según Decreto 549/25** • Dentro de cada región → suma aritmética + tope • Entre regiones → Capacidad Restante (Balthazard)")
     
     sumas_seg = {}
     for i, p in enumerate(st.session_state.pericia):
