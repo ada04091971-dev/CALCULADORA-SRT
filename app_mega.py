@@ -41,13 +41,13 @@ def cargar_datos():
         st.error("No se encontró el archivo calculadora_final_srt.xlsx")
         st.stop()
 
+    # NOMBRES EXACTOS DE LAS HOJAS (con los espacios correctos)
     df_main = pd.read_excel(archivo, sheet_name="Lesiones ").fillna("")
-    df_main.columns = df_main.columns.str.strip()
-
-    df_mid = pd.read_excel(archivo, sheet_name="Miembro Inferior Derecho").fillna("")
-    df_mid.columns = df_mid.columns.str.strip()
-
+    df_mid = pd.read_excel(archivo, sheet_name="Miembro Inferior  Derecho").fillna("")
     df_mii = pd.read_excel(archivo, sheet_name="Miembro Inferior Izquierdo").fillna("")
+
+    df_main.columns = df_main.columns.str.strip()
+    df_mid.columns = df_mid.columns.str.strip()
     df_mii.columns = df_mii.columns.str.strip()
 
     def limpiar_numero(val):
