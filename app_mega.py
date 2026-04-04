@@ -2,225 +2,157 @@ import streamlit as st
 import pandas as pd
 import os
 
-st.set_page_config(page_title="Calculadora integral SRT", layout="wide", page_icon="🧮")
+st.set_page_config(page_title="Mega Calculadora SRT", layout="wide")
 
 def format_text(text):
     if not text: return ""
-    text = str(text).strip()
-    return text[0].upper() + text[1:]
+    return str(text).strip().capitalize()
 
-# --- PESOS NERVIOS ---
-pesos_nervios_completos = {
-    "Supraescapular": {"m": 1.0, "s": 0.0}, "Torácico largo": {"m": 1.0, "s": 0.0},
-    "Axilar": {"m": 0.98, "s": 0.02}, "Circunflejo": {"m": 0.98, "s": 0.02},
-    "Radial": {"m": 0.90, "s": 0.10}, "Músculo cutáneo": {"m": 0.90, "s": 0.10},
-    "Interóseo posterior": {"m": 1.0, "s": 0.0}, "Antebraquial cutáneo medial": {"m": 0.0, "s": 1.0},
-    "Mediano": {"m": 0.70, "s": 0.30}, "Interóseo anterior": {"m": 1.0, "s": 0.0},
-    "Cubital": {"m": 0.70, "s": 0.30}, "Digital": {"m": 0.0, "s": 1.0}, "Colateral": {"m": 0.0, "s": 1.0},
-    "Crural": {"m": 0.80, "s": 0.20}, "Femoral": {"m": 0.80, "s": 0.20}, "Obturador": {"m": 1.0, "s": 0.0},
-    "Femorocutáneo": {"m": 0.0, "s": 1.0}, "Ciático mayor": {"m": 0.70, "s": 0.30},
-    "Peroneo común": {"m": 0.70, "s": 0.30}, "Ciático poplíteo externo": {"m": 0.70, "s": 0.30},
-    "Peroneo superficial": {"m": 0.0, "s": 1.0}, "Tibial anterior": {"m": 0.75, "s": 0.25},
-    "Ciático poplíteo interno": {"m": 0.60, "s": 0.40}, "Tibial": {"m": 0.60, "s": 0.40},
-    "Tibial posterior": {"m": 0.50, "s": 0.50}, "Safeno": {"m": 0.0, "s": 1.0},
-    "Sural": {"m": 0.0, "s": 1.0}, "Plantar": {"m": 0.30, "s": 0.70}
-}
-
-escalas_ms = {
-    "Grado 5 (Normal - 0%)": 0.0, "Grado 4 (Leve - 20%)": 0.2, "Grado 3 (Moderado - 50%)": 0.5,
-    "Grado 2 (Grave - 80%)": 0.8, "Grado 1 (Severo - 90%)": 0.9, "Grado 0 (Total - 100%)": 1.0
-}
-
+# Carga de datos (con nombres exactos de las hojas)
 @st.cache_data
 def cargar_datos():
     archivo = "calculadora_final_srt.xlsx"
     if not os.path.exists(archivo):
-        archivos = [f for f in os.listdir(".") if f.endswith(".xlsx")]
-        archivo = archivos[0] if archivos else ""
-    if not archivo:
-        st.error("No se encontró el archivo calculadora_final_srt.xlsx")
+        st.error("No se encontró calculadora_final_srt.xlsx")
         st.stop()
 
-    sheets = pd.ExcelFile(archivo).sheet_names
-    data = {}
-    for sheet in sheets:
-        df = pd.read_excel(archivo, sheet_name=sheet).fillna("")
-        df.columns = df.columns.str.strip()
-        if 'Categoria' in df.columns:
-            df = df.rename(columns={'Categoria': 'Categorias'})
-        if '% de Incapacidad Laboral' in df.columns:
-            df['% de Incapacidad Laboral'] = df['% de Incapacidad Laboral'].apply(limpiar_numero)
-        data[sheet] = df
-    return data
+    df_main = pd.read_excel(archivo, sheet_name="Lesiones ").fillna("")
+    df_mid = pd.read_excel(archivo, sheet_name="Miembro Inferior  Derecho").fillna("")
+    df_mii = pd.read_excel(archivo, sheet_name="Miembro Inferior Izquierdo").fillna("")
 
-def limpiar_numero(val):
-    try:
-        if isinstance(val, str):
-            val = val.replace('%', '').replace(',', '.')
-        n = float(val)
-        return n * 100 if 0 < n < 1 else n
-    except:
-        return 0.0
+    df_main.columns = df_main.columns.str.strip()
+    df_mid.columns = df_mid.columns.str.strip()
+    df_mii.columns = df_mii.columns.str.strip()
 
-datos = cargar_datos()
+    def limpiar(val):
+        try:
+            if isinstance(val, str):
+                val = val.replace("%", "").replace(",", ".")
+            return float(val)
+        except:
+            return 0.0
 
-def balthazard(lista):
-    lista = sorted([x for x in lista if x > 0], reverse=True)
-    if not lista: return 0.0
-    total = lista[0]
-    for i in range(1, len(lista)):
-        total = total + (lista[i] * (100 - total) / 100)
-    return round(total, 2)
+    for df in [df_main, df_mid, df_mii]:
+        if "% de Incapacidad Laboral" in df.columns:
+            df["% de Incapacidad Laboral"] = df["% de Incapacidad Laboral"].apply(limpiar)
 
-# =============================================
-# ================= INTERFAZ =================
-# =============================================
-st.title("🧮 **Mega Calculadora SRT – Decreto 549/25**")
-st.markdown("---")
+    return df_main, df_mid, df_mii
+
+df_main, df_mid, df_mii = cargar_datos()
 
 if 'pericia' not in st.session_state:
     st.session_state.pericia = []
 
+# =============================================
+# ================= SIDEBAR ===================
+# =============================================
 with st.sidebar:
     st.header("**Carga de hallazgos**")
-    
-    capitulo = st.selectbox("**1. Capítulo**", ["Osteoarticular", "Sistema Nervioso"], index=None, placeholder="Seleccionar")
-    
-    if capitulo:
-        apartados = ["Columna Vertebral", "Miembro Superior", "Miembro Inferior"]
-        apartado = st.selectbox("**2. Apartado**", apartados, index=None, placeholder="Seleccionar")
-        
-        if apartado:
-            if apartado == "Columna Vertebral":
-                sector = st.selectbox("**3. Sector anatómico**", ["Cervical", "Dorsal", "Lumbar", "Sacrococcigea", "Coxis"], index=None, placeholder="Seleccionar")
-                sheet_name = sector
-            else:
-                lateralidad = st.radio("**3. Lateralidad**", ["Derecho", "Izquierdo"], horizontal=True)
-                if apartado == "Miembro Superior":
-                    sheet_name = "Miembros Superior Derecho" if lateralidad == "Derecho" else "Miembro superior  Izquierdo"
-                else:
-                    sheet_name = "Miembro Inferior  Derecho" if lateralidad == "Derecho" else "Miembro Inferior Izquierdo"
-            
-            if apartado == "Columna Vertebral" and (sector is None or sector == "Seleccionar"):
-                st.info("Seleccione un sector anatómico para continuar")
-                st.stop()
-            
-            df_filtrado = datos[sheet_name].copy()
-            
-            if capitulo == "Osteoarticular":
-                df_filtrado = df_filtrado[df_filtrado['Capítulo'].str.contains("Osteoarticular", case=False, na=False)]
-            else:
-                df_filtrado = df_filtrado[df_filtrado['Capítulo'].str.contains("Sistema Nervioso", case=False, na=False)]
-            
-            cats = ["Ver todas"] + sorted(df_filtrado['Categorias'].dropna().unique().tolist())
-            cat_sel = st.selectbox("**4. Categoría**", cats, index=0)
-            
-            # ====================== SUB-SELECTOR SOLO PARA MIEMBRO SUPERIOR ======================
-            sub_filtro = None
-            if apartado == "Miembro Superior" and cat_sel == "AMPUTACIONES":
-                sub_filtro = st.selectbox("**Nivel / Parte anatómica**", 
-                                        ["Ver todas", "Hombro/Cintura escapular", "Brazo", "Codo", 
-                                         "Antebrazo", "Muñeca", "Mano completa", "Pulgar", 
-                                         "Dedos (índice, mayor, anular, meñique)"])
 
-            # Columna (intacta)
-            movimiento_columna = None
-            if apartado == "Columna Vertebral" and "Limitación Funcional" in cat_sel:
-                movimientos = ["Flexión", "Extensión", "Rotación Derecha", "Rotación Izquierda", "Inclinación Derecha", "Inclinación Izquierda"]
-                movimiento_columna = st.selectbox("**Tipo de Movimiento**", ["Seleccione..."] + movimientos, index=0)
+    capitulo = st.selectbox("**1. Capítulo**", ["Osteoarticular", "Sistema Nervioso"], index=0)
 
-            # ====================== FILTRADO ======================
-            if cat_sel != "Ver todas":
-                df_filtrado = df_filtrado[df_filtrado['Categorias'].str.contains(cat_sel, case=False, na=False)]
-            
-            if movimiento_columna and movimiento_columna != "Seleccione...":
-                df_filtrado = df_filtrado[df_filtrado['Descripción de Lesión'].str.contains(movimiento_columna, case=False)]
-            
-            if sub_filtro and sub_filtro != "Ver todas":
-                df_filtrado = df_filtrado[df_filtrado['Descripción de Lesión'].str.contains(sub_filtro, case=False)]
-            
-            opciones = sorted(df_filtrado['Descripción de Lesión'].unique())
-            if opciones:
-                item_sel = st.selectbox(f"**5. Descripción de Lesión ({len(opciones)})**", opciones, 
-                                        format_func=format_text, index=None, placeholder="Seleccionar")
-                
-                if item_sel:
-                    v_max = df_filtrado[df_filtrado['Descripción de Lesión'] == item_sel]['% de Incapacidad Laboral'].iloc[0]
-                    valor_calculado = v_max
-                    
-                    st.info(f"**Valor a agregar: {round(valor_calculado, 2)}%**")
-                    if st.button("**AGREGAR**"):
-                        st.session_state.pericia.append({
-                            "cap": capitulo,
-                            "ap": apartado,
-                            "sec": sector if apartado == "Columna Vertebral" else lateralidad,
-                            "desc": item_sel,
-                            "val": round(valor_calculado, 2)
-                        })
-                        st.rerun()
+    if capitulo == "Osteoarticular":
+        apartado_options = ["Columna Vertebral", "Miembro Superior", "Miembro Inferior"]
+    else:
+        apartado_options = ["Columna Vertebral", "Miembro Superior", "Miembro Inferior"]
 
+    apartado = st.selectbox("**2. Apartado**", apartado_options)
+
+    # Lateralidad (solo para extremidades)
+    if apartado in ["Miembro Superior", "Miembro Inferior"]:
+        lateralidad = st.radio("**3. Lateralidad**", ["Derecho", "Izquierdo"], horizontal=True)
+    else:
+        lateralidad = None
+
+    # Categoría dinámica
+    if apartado == "Columna Vertebral":
+        cats = ["Ver todas", "Fracturas Vertebrales", "Lesiones Discales y Ligamentarias", "Limitación Funcional", "Anquilosis"]
+    elif apartado == "Miembro Superior":
+        cats = ["Ver todas", "Amputaciones", "Fracturas", "Artroplastias", "Inestabilidad Articular", "Lesiones Músculo-Tendinosas", "Limitación Funcional", "Anquilosis"]
+    else:  # Miembro Inferior
+        cats = ["Ver todas", "Amputaciones", "Fracturas", "Artroplastias", "Lesiones Capsulo-Ligamentarias Y Meniscales", "Lesiones Músculo-Tendinosas", "Limitación Funcional", "Anquilosis", "Pelvis Inestable"]
+
+    categoria = st.selectbox("**4. Categoría**", cats)
+
+    # Nivel / Parte anatómica (este era el que estaba vacío)
+    if apartado == "Miembro Superior":
+        niveles = ["Hombro/Cintura escapular", "Codo", "Muñeca", "Mano", "Dedos"]
+    elif apartado == "Miembro Inferior":
+        niveles = ["Cadera", "Rodilla", "Tobillo", "Pie", "Pelvis"]
+    else:
+        niveles = ["Ver todos"]
+
+    nivel = st.selectbox("**Nivel / Parte anatómica**", niveles)
+
+    # === FILTRADO FINAL ===
+    if apartado == "Columna Vertebral":
+        df_fil = df_main[df_main['Apartado'].str.contains("Columna Vertebral", case=False)].copy()
+    elif apartado == "Miembro Superior":
+        df_fil = df_main[df_main['Apartado'].str.contains("Miembro Superior", case=False)].copy()
+    elif apartado == "Miembro Inferior" and lateralidad == "Derecho":
+        df_fil = df_mid.copy()
+    else:
+        df_fil = df_mii.copy()
+
+    # Filtro por categoría
+    if categoria != "Ver todas":
+        if apartado == "Miembro Inferior":
+            # Usamos la columna "Categorias" que creaste en las hojas inferiores
+            df_fil = df_fil[df_fil['Categorias'].str.contains(categoria, case=False, na=False)]
+        else:
+            df_fil = df_fil[df_fil['Descripción de Lesión'].str.contains(categoria, case=False)]
+
+    # Filtro por Nivel / Parte anatómica
+    if nivel != "Ver todos":
+        if apartado == "Miembro Inferior":
+            df_fil = df_fil[df_fil['Categorias'].str.contains(nivel, case=False, na=False)]
+        else:
+            # Para miembro superior y columna usamos palabras clave en la descripción
+            map_nivel = {
+                "Hombro/Cintura escapular": "Hombro|escapular|clavícula|escápula|glenohumeral",
+                "Codo": "Codo|cúbito|tríceps|bíceps",
+                "Muñeca": "Muñeca|carpo|escafoides|semilunar",
+                "Mano": "Mano|metacarpiano|dedo|pulgar",
+                "Dedos": "Dedos|falange|pulgar|índice|mayor|anular|meñique",
+                "Cadera": "Cadera|coxofemoral|fémur",
+                "Rodilla": "Rodilla|rótula|tibia|peroné",
+                "Tobillo": "Tobillo|astrágalo|cálcaneo",
+                "Pie": "Pie|metatarsiano|tarso|dedo del pie",
+                "Pelvis": "Pelvis|hemipelvis|iliaco|cotilo"
+            }
+            kw = map_nivel.get(nivel, nivel)
+            df_fil = df_fil[df_fil['Descripción de Lesión'].str.contains(kw, case=False)]
+
+    opciones = sorted(df_fil['Descripción de Lesión'].dropna().unique())
+
+    if opciones:
+        lesion = st.selectbox("**Secuela específica**", opciones, format_func=format_text, index=None)
+        if lesion:
+            valor = df_fil[df_fil['Descripción de Lesión'] == lesion]['% de Incapacidad Laboral'].iloc[0]
+            st.success(f"**Valor: {valor}%**")
+            if st.button("**AGREGAR A LA PERICIA**"):
+                st.session_state.pericia.append({
+                    "capitulo": capitulo,
+                    "apartado": apartado,
+                    "lateralidad": lateralidad,
+                    "categoria": categoria,
+                    "nivel": nivel,
+                    "lesion": lesion,
+                    "valor": valor
+                })
+                st.rerun()
+
+# =============================================
 # ================= RESULTADOS =================
-if st.session_state.pericia:
-    st.subheader("**Detalle del dictamen médico**")
-    st.info("""
-    **Regla aplicada según Decreto 549/25**  
-    • Dentro de cada **región topográfica / misma lateralidad** → **suma aritmética** + **tope regional**.  
-    • Entre regiones diferentes → **Capacidad Restante** (Balthazard).
-    """)
+# =============================================
+st.title("Mega Calculadora SRT – Decreto 549/25")
 
-    sumas_seg = {}
-    for i, p in enumerate(st.session_state.pericia):
-        c1, c2, c3 = st.columns([2, 6, 1])
-        c1.write(f"**{p['ap']} {p['sec']}**")
-        c2.write(f"{format_text(p['desc'])} ({p['val']}%)")
-        if c3.button("🗑️", key=f"del_{i}"):
+if st.session_state.pericia:
+    st.subheader("Hallazgos cargados")
+    for i, item in enumerate(st.session_state.pericia):
+        col1, col2, col3 = st.columns([3, 5, 1])
+        col1.write(f"**{item['apartado']}** - {item.get('lateralidad','')}")
+        col2.write(f"{item['lesion']} → **{item['valor']}%**")
+        if col3.button("🗑️", key=f"del{i}"):
             st.session_state.pericia.pop(i)
             st.rerun()
-
-        llave = f"{p['ap']} {p['sec']}" if p['ap'] != "Columna Vertebral" else ("Columna cervical" if "Cervical" in str(p['sec']) else "Columna dorsolumbar")
-        sumas_seg[llave] = sumas_seg.get(llave, 0) + p['val']
-
-    topes = {"MSI": 66.0, "MSD": 66.0, "MII": 70.0, "MID": 70.0, 
-             "Columna cervical": 40.0, "Columna dorsolumbar": 60.0}
-
-    st.markdown("---")
-    st.write("**Análisis de topes por región topográfica**")
-
-    v_bal = []
-    for s, suma in sumas_seg.items():
-        t = topes.get(s, 100.0)
-        v_final = min(suma, t)
-        v_bal.append(v_final)
-        
-        col1, col2, col3 = st.columns([3, 2, 3])
-        col1.write(f"**{s}**")
-        col2.metric("Suma bruta", f"{suma:.2f}%")
-        if suma > t:
-            col3.error(f"**Tope aplicado → {v_final:.2f}%** (máx. {t}%)")
-        else:
-            col3.success(f"Valor final: **{v_final:.2f}%**")
-
-    fis = balthazard(v_bal)
-
-    st.markdown("### **Factores de ponderación**")
-    u_edad = st.number_input("**Edad del trabajador**", 14, 99, 17)
-    f_e = 0.05 if u_edad <= 20 else 0.04 if u_edad <= 30 else 0.03 if u_edad <= 40 else 0.02
-    u_dif = st.selectbox("**Dificultad para tareas habituales**", ["Leve (5%)", "Intermedia (10%)", "Alta (20%)"], index=1)
-    f_d = {"Leve (5%)": 0.05, "Intermedia (10%)": 0.10, "Alta (20%)": 0.20}[u_dif]
-    
-    inc = fis * (f_e + f_d)
-    res_f = min(fis + inc, 65.99) if fis < 66.0 else min(fis + inc, 100.0)
-
-    col_l, col_r = st.columns(2)
-    with col_l:
-        st.metric("**Daño físico residual (Cap. Restante)**", f"{fis}%")
-        st.metric("**Incremento por factores**", f"{round(inc, 2)}%")
-    with col_r:
-        if res_f >= 66.0:
-            st.error(f"## **ILP FINAL: {round(res_f, 2)}% (TOTAL)**")
-        else:
-            st.success(f"## **ILP FINAL: {round(res_f, 2)}% (PARCIAL)**")
-
-    if st.button("🚨 **BORRAR TODO EL DICTAMEN**"):
-        st.session_state.pericia = []
-        st.rerun()
