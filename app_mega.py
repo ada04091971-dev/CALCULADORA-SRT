@@ -1,12 +1,4 @@
-✅ Error corregido (problema de nombres de hojas).
-El error sigue ocurriendo porque los nombres de las hojas en tu Excel tienen espacios extras muy específicos:
-
-"Lesiones " (espacio al final)
-"Miembro Inferior  Derecho" (doble espacio)
-"Miembro Inferior Izquierdo"
-
-Reemplaza todo tu app_mega.py por esta versión robusta (ya incluye diagnóstico automático de hojas):
-Pythonimport streamlit as st
+import streamlit as st
 import pandas as pd
 import os
 
