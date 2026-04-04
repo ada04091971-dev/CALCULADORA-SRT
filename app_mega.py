@@ -53,20 +53,18 @@ with st.sidebar:
 
         if sector_anat and (region == "Columna" or (region != "Columna" and lat)):
             try:
-                # Cargamos la hoja y forzamos la lectura limpia
                 df = pd.read_excel(xls, sheet_name=hoja).fillna("")
                 
-                # REGLA DE ORO: Selección por posición de columna
-                # Columna A (0): Capítulo | B (1): Apartado | C (2): Categoría | D (3): Descripción | E (4): %
-                
+                # REGLA DE POSICIÓN: Columna C (2) es Categoría, D (3) es Descripción, E (4) es %
                 df_f = df.copy()
-                # Filtro por sector (solo para Miembros, para reducir las 30 categorías)
+                
+                # Filtro por sector (solo para Miembros)
                 if region != "Columna":
-                    # Buscamos el sector en la columna C (2) o D (3)
+                    # Filtro más permisivo para no perder secuelas que no digan "Tobillo" en el nombre pero sí en la categoría
                     df_f = df_f[df_f.iloc[:, 2].astype(str).str.contains(sector_anat, case=False, na=False) | 
                                 df_f.iloc[:, 3].astype(str).str.contains(sector_anat, case=False, na=False)]
 
-                # 4. Categoría (Columna C -> Índice 2)
+                # 4. Categoría (Columna C)
                 lista_cats = sorted([str(x) for x in df_f.iloc[:, 2].unique() if str(x).strip() != ""])
                 categorias = ["Ver todas"] + lista_cats
                 cat_sel = st.selectbox("**4. Categoría**", categorias)
@@ -74,27 +72,25 @@ with st.sidebar:
                 if cat_sel != "Ver todas":
                     df_f = df_f[df_f.iloc[:, 2].astype(str) == cat_sel]
                 
-                # 5. Movimiento (Goniometría)
+                # 5. Movimiento (Goniometría) - LISTA AMPLIADA
                 if any(x in str(cat_sel).lower() for x in ["anquilosis", "limitación"]):
-                    movs = ["Flexión", "Extensión", "Inclinación", "Rotación", "Abducción", "Aducción", "Pronación", "Supinación"]
-                    # Filtramos en la columna D (índice 3)
+                    # Agregamos Dorsiflexión y Dorsal para cubrir Tobillo y Muñeca
+                    movs = ["Flexión", "Extensión", "Dorsiflexión", "Dorsal", "Inclinación", "Rotación", "Abducción", "Aducción", "Pronación", "Supinación"]
                     opc_mov = [m for m in movs if df_f.iloc[:, 3].astype(str).str.contains(m, case=False).any()]
                     if opc_mov:
                         tipo_mov = st.selectbox("**5. Movimiento**", opc_mov, index=None)
                         if tipo_mov:
                             df_f = df_f[df_f.iloc[:, 3].astype(str).str.contains(tipo_mov, case=False)]
 
-                # 6. Secuela Específica (Columna D -> Índice 3)
+                # 6. Secuela Específica (Columna D)
                 opciones = sorted(df_f.iloc[:, 3].unique().tolist())
                 if opciones:
                     item = st.selectbox(f"**6. Secuela ({len(opciones)})**", opciones, format_func=format_text, index=None)
                     
                     if item:
-                        # Obtenemos el valor de la Columna E (Índice 4)
                         fila = df_f[df_f.iloc[:, 3] == item]
                         valor = fila.iloc[0, 4]
                         
-                        # Limpieza de valor numérico
                         try:
                             val_num = float(str(valor).replace('%', '').replace(',', '.'))
                             if 0 < val_num < 1: val_num *= 100
@@ -102,7 +98,6 @@ with st.sidebar:
 
                         st.success(f"**Valor Baremo: {round(val_num, 2)}%**")
                         
-                        # EL BOTÓN (Ahora garantizado)
                         if st.button("**AGREGAR A LA PERICIA**"):
                             st.session_state.pericia.append({
                                 "reg": sector_anat if region == "Columna" else f"{sector_anat} {lat}",
@@ -110,11 +105,8 @@ with st.sidebar:
                                 "val": round(val_num, 2)
                             })
                             st.rerun()
-                else:
-                    st.warning("No se encontraron secuelas bajo estos filtros.")
-
             except Exception as e:
-                st.error(f"Error al procesar la hoja {hoja}. Verificá que tenga 5 columnas (A a E).")
+                st.error(f"Error en hoja {hoja}: {e}")
 
 # --- PANEL DE RESULTADOS ---
 if st.session_state.pericia:
@@ -127,7 +119,6 @@ if st.session_state.pericia:
         if c3.button("🗑️", key=f"del_{i}"):
             st.session_state.pericia.pop(i); st.rerun()
         
-        # Agrupación para aplicación de Topes del Decreto
         r_u = p['reg'].upper()
         if any(x in r_u for x in ["CERVICAL", "DORSAL", "LUMBAR", "SACRO", "COXIS"]):
             llave = "Columna"
@@ -149,11 +140,10 @@ if st.session_state.pericia:
             valor_final = min(suma, t)
             v_finales.append(valor_final)
             if suma > t:
-                st.warning(f"⚠️ {reg_nombre}: {suma}% (Tope aplicado: {t}%)")
+                st.warning(f"⚠️ {reg_nombre}: {suma}% (Tope: {t}%)")
             else:
                 st.write(f"✅ {reg_nombre}: {suma}%")
 
-        st.markdown("### **Factores de Ponderación**")
         edad = st.number_input("**Edad**", 14, 99, 25)
         f_e = 0.05 if edad <= 20 else 0.04 if edad <= 30 else 0.03 if edad <= 40 else 0.02
         f_d = st.selectbox("**Dificultad**", [0.05, 0.10, 0.20], format_func=lambda x: f"{int(x*100)}%")
@@ -166,5 +156,5 @@ if st.session_state.pericia:
         st.metric("**Daño Físico (Balthazard)**", f"{fis}%")
         st.metric("**Factores Ponderados**", f"{round(inc, 2)}%")
         st.metric("**Incapacidad Final**", f"{round(res_f, 2)}%")
-        if st.button("🚨 **REINICIAR CÁLCULO**"):
+        if st.button("🚨 **REINICIAR**"):
             st.session_state.pericia = []; st.rerun()
