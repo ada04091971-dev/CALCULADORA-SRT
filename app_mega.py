@@ -3,7 +3,7 @@ import pandas as pd
 import os
 
 # configuración de página
-st.set_page_config(page_title="Calculadora laboral SRT", layout="wide", page_icon="🧮")
+st.set_page_config(page_title="calculadora laboral SRT", layout="wide", page_icon="🧮")
 
 def format_text(text):
     if not text: return ""
@@ -26,7 +26,7 @@ def balthazard(lista):
         total = total + (lista[i] * (100 - total) / 100)
     return round(total, 2)
 
-# --- interfaz principal ---
+# interfaz principal
 st.title("🧮 **calculadora laboral SRT: decreto 549/25**")
 st.markdown("---")
 
@@ -56,8 +56,7 @@ with st.sidebar:
                 df = pd.read_excel(xls, sheet_name=hoja).fillna("")
                 df_f = df.copy()
                 
-                # REGLA DE POSICIÓN: C(2) Categoría, D(3) Descripción, E(4) %
-                # filtro anatómico para miembros
+                # regla de posición: C(2) categoría, D(3) descripción, E(4) %
                 if region != "Columna":
                     df_f = df_f[df_f.iloc[:, 2].astype(str).str.contains(sector_anat, case=False, na=False) | 
                                 df_f.iloc[:, 3].astype(str).str.contains(sector_anat, case=False, na=False)]
@@ -69,7 +68,7 @@ with st.sidebar:
                 if cat_sel != "ver todas":
                     df_f = df_f[df_f.iloc[:, 2].astype(str) == cat_sel]
                 
-                # 5. movimiento (goniometría ampliada)
+                # 5. movimiento (goniometría)
                 if any(x in str(cat_sel).lower() for x in ["anquilosis", "limitación"]):
                     movs = ["Flexión", "Extensión", "Dorsiflexión", "Dorsal", "Inclinación", "Rotación", "Abducción", "Aducción", "Pronación", "Supinación"]
                     opc_mov = [m for m in movs if df_f.iloc[:, 3].astype(str).str.contains(m, case=False).any()]
@@ -78,14 +77,14 @@ with st.sidebar:
                         if tipo_mov:
                             df_f = df_f[df_f.iloc[:, 3].astype(str).str.contains(tipo_mov, case=False)]
 
-                # 6. secuela específica (columna d limpia)
+                # 6. secuela específica (columna D ahora limpia de repeticiones)
                 opciones = sorted(df_f.iloc[:, 3].unique().tolist())
                 if opciones:
                     item = st.selectbox(f"**6. secuela ({len(opciones)})**", opciones, format_func=format_text, index=None)
                     
                     if item:
                         fila = df_f[df_f.iloc[:, 3] == item]
-                        valor = fila.iloc[0, 4] # Columna E
+                        valor = fila.iloc[0, 4]
                         
                         try:
                             val_num = float(str(valor).replace('%', '').replace(',', '.'))
@@ -104,9 +103,9 @@ with st.sidebar:
             except Exception as e:
                 st.error(f"error en hoja {hoja}: {e}")
 
-# --- resultados ---
+# --- resultados y topes ---
 if st.session_state.pericia:
-    st.subheader("**detalle del dictamen (decreto 549/25)**")
+    st.subheader("**detalle del dictamen médico**")
     sumas_regionales = {}
     for i, p in enumerate(st.session_state.pericia):
         c1, c2, c3 = st.columns([3, 5, 1])
@@ -128,7 +127,7 @@ if st.session_state.pericia:
     st.markdown("---")
     col_izq, col_der = st.columns(2)
     with col_izq:
-        st.write("**análisis de topes legales:**")
+        st.write("**análisis de topes regionales:**")
         v_finales = []
         for reg_nombre, suma in sumas_regionales.items():
             t = topes.get(reg_nombre, 100.0)
@@ -140,17 +139,31 @@ if st.session_state.pericia:
                 st.write(f"✅ {reg_nombre}: {suma}%")
 
         st.markdown("### **factores de ponderación**")
-        edad = st.number_input("**edad**", 14, 99, 25)
-        f_e = 0.05 if edad <= 20 else 0.04 if edad <= 30 else 0.03 if edad <= 40 else 0.02
+        u_edad = st.number_input("**edad**", 14, 99, 25)
+        f_e = 0.05 if u_edad <= 20 else 0.04 if u_edad <= 30 else 0.03 if u_edad <= 40 else 0.02
         f_d = st.selectbox("**dificultad**", [0.05, 0.10, 0.20], format_func=lambda x: f"{int(x*100)}%")
         
         fis = balthazard(v_finales)
         inc = fis * (f_e + f_d)
-        res_f = fis + inc
+        
+        # 🛡️ lógica de seguridad para el tope de 65.99%
+        total_preliminar = fis + inc
+        if total_preliminar >= 66.0:
+            total_final = 65.99
+            alerta_tope = True
+        else:
+            total_final = total_preliminar
+            alerta_tope = False
 
     with col_der:
         st.metric("**daño físico (balthazard)**", f"{fis}%")
-        st.metric("**factores ponderados**", f"{round(inc, 2)}%")
-        st.metric("**incapacidad final**", f"{round(res_f, 2)}%")
+        st.metric("**factores aplicados**", f"{round(inc, 2)}%")
+        
+        if alerta_tope:
+            st.error(f"## **ILP final: {total_final}%**")
+            st.caption("nota: se aplicó el tope legal de 65.99% para incapacidades parciales.")
+        else:
+            st.success(f"## **ILP final: {round(total_final, 2)}%**")
+            
         if st.button("🚨 **reiniciar**"):
             st.session_state.pericia = []; st.rerun()
