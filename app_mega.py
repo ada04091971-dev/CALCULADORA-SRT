@@ -26,13 +26,6 @@ def balthazard(lista):
         total = total + (lista[i] * (100 - total) / 100)
     return round(total, 2)
 
-# Buscador flexible para Columnas (Prioriza la posición si falla el nombre)
-def obtener_datos_columna(df, palabras_clave, indice_fallback):
-    for col in df.columns:
-        if any(p.lower() in str(col).lower() for p in palabras_clave):
-            return col
-    return df.columns[indice_fallback]
-
 # --- Interfaz principal ---
 st.title("🧮 **Calculadora Laboral SRT: Decreto 549/25**")
 st.markdown("---")
@@ -48,63 +41,82 @@ with st.sidebar:
     region = st.selectbox("**1. Región**", ["Columna", "Miembro Superior", "Miembro Inferior"], index=None)
     
     if region:
+        # 2. Selección de Hoja
         if region == "Columna":
-            sector = st.selectbox("**2. Nivel vertebral**", ["Cervical", "Dorsal", "Lumbar", "Sacrococcigea", "Coxis"], index=None)
-            hoja = sector
+            sector_anat = st.selectbox("**2. Nivel vertebral**", ["Cervical", "Dorsal", "Lumbar", "Sacrococcigea", "Coxis"], index=None)
+            hoja = sector_anat
         else:
             lat = st.selectbox("**2. Lateralidad**", ["Derecho", "Izquierdo"], index=None)
             sectores_m = ["Hombro", "Brazo", "Codo", "Antebrazo", "Muñeca", "Mano", "Dedos"] if "Superior" in region else ["Cadera", "Muslo", "Rodilla", "Pierna", "Tobillo", "Pie", "Dedos"]
-            sector = st.selectbox("**3. Sector anatómico**", sectores_m, index=None)
+            sector_anat = st.selectbox("**3. Sector anatómico**", sectores_m, index=None)
             hoja = f"{region} {lat}"
 
-        if sector and (region == "Columna" or lat):
-            df = pd.read_excel(xls, sheet_name=hoja).fillna("")
-            df.columns = df.columns.str.strip()
-            
-            # Identificación de columnas críticas
-            c_cat = obtener_datos_columna(df, ["categor", "apartado"], 2)
-            c_desc = obtener_datos_columna(df, ["descrip"], 3)
-            c_inc = obtener_datos_columna(df, ["incap", "%"], 4) # Columna E (Índice 4)
+        if sector_anat and (region == "Columna" or (region != "Columna" and lat)):
+            try:
+                # Cargamos la hoja y forzamos la lectura limpia
+                df = pd.read_excel(xls, sheet_name=hoja).fillna("")
+                
+                # REGLA DE ORO: Selección por posición de columna
+                # Columna A (0): Capítulo | B (1): Apartado | C (2): Categoría | D (3): Descripción | E (4): %
+                
+                df_f = df.copy()
+                # Filtro por sector (solo para Miembros, para reducir las 30 categorías)
+                if region != "Columna":
+                    # Buscamos el sector en la columna C (2) o D (3)
+                    df_f = df_f[df_f.iloc[:, 2].astype(str).str.contains(sector_anat, case=False, na=False) | 
+                                df_f.iloc[:, 3].astype(str).str.contains(sector_anat, case=False, na=False)]
 
-            # Filtro por sector (solo para miembros)
-            df_f = df.copy()
-            if region != "Columna":
-                df_f = df_f[df_f[c_cat].str.contains(sector, case=False, na=False) | 
-                            df_f[c_desc].str.contains(sector, case=False, na=False)]
+                # 4. Categoría (Columna C -> Índice 2)
+                lista_cats = sorted([str(x) for x in df_f.iloc[:, 2].unique() if str(x).strip() != ""])
+                categorias = ["Ver todas"] + lista_cats
+                cat_sel = st.selectbox("**4. Categoría**", categorias)
+                
+                if cat_sel != "Ver todas":
+                    df_f = df_f[df_f.iloc[:, 2].astype(str) == cat_sel]
+                
+                # 5. Movimiento (Goniometría)
+                if any(x in str(cat_sel).lower() for x in ["anquilosis", "limitación"]):
+                    movs = ["Flexión", "Extensión", "Inclinación", "Rotación", "Abducción", "Aducción", "Pronación", "Supinación"]
+                    # Filtramos en la columna D (índice 3)
+                    opc_mov = [m for m in movs if df_f.iloc[:, 3].astype(str).str.contains(m, case=False).any()]
+                    if opc_mov:
+                        tipo_mov = st.selectbox("**5. Movimiento**", opc_mov, index=None)
+                        if tipo_mov:
+                            df_f = df_f[df_f.iloc[:, 3].astype(str).str.contains(tipo_mov, case=False)]
 
-            # 4. Categoría
-            categorias = ["Ver todas"] + sorted(df_f[c_cat].unique().tolist())
-            cat_sel = st.selectbox("**4. Categoría**", categorias)
-            if cat_sel != "Ver todas":
-                df_f = df_f[df_f[c_cat] == cat_sel]
-            
-            # 5. Movimiento (Goniometría)
-            if any(x in str(cat_sel).lower() for x in ["anquilosis", "limitación"]):
-                movs = ["Flexión", "Extensión", "Inclinación", "Rotación", "Abducción", "Aducción", "Pronación", "Supinación"]
-                opc_mov = [m for m in movs if df_f[c_desc].str.contains(m, case=False).any()]
-                if opc_mov:
-                    tipo_mov = st.selectbox("**5. Movimiento**", opc_mov, index=None)
-                    if tipo_mov:
-                        df_f = df_f[df_f[c_desc].str.contains(tipo_mov, case=False)]
-
-            # 6. Selección de Secuela
-            opciones = sorted(df_f[c_desc].unique())
-            if opciones:
-                item = st.selectbox(f"**6. Secuela ({len(opciones)})**", opciones, format_func=format_text, index=None)
-                if item:
-                    valor = df_f[df_f[c_desc] == item][c_inc].iloc[0]
-                    st.success(f"**Valor Baremo: {valor}%**")
+                # 6. Secuela Específica (Columna D -> Índice 3)
+                opciones = sorted(df_f.iloc[:, 3].unique().tolist())
+                if opciones:
+                    item = st.selectbox(f"**6. Secuela ({len(opciones)})**", opciones, format_func=format_text, index=None)
                     
-                    # BOTÓN DE CARGA
-                    if st.button("**AGREGAR A LA PERICIA**"):
-                        st.session_state.pericia.append({
-                            "reg": sector if region == "Columna" else f"{sector} {lat}",
-                            "desc": item, 
-                            "val": float(valor)
-                        })
-                        st.rerun()
+                    if item:
+                        # Obtenemos el valor de la Columna E (Índice 4)
+                        fila = df_f[df_f.iloc[:, 3] == item]
+                        valor = fila.iloc[0, 4]
+                        
+                        # Limpieza de valor numérico
+                        try:
+                            val_num = float(str(valor).replace('%', '').replace(',', '.'))
+                            if 0 < val_num < 1: val_num *= 100
+                        except: val_num = 0.0
 
-# --- PANEL DE RESULTADOS Y TOPES ---
+                        st.success(f"**Valor Baremo: {round(val_num, 2)}%**")
+                        
+                        # EL BOTÓN (Ahora garantizado)
+                        if st.button("**AGREGAR A LA PERICIA**"):
+                            st.session_state.pericia.append({
+                                "reg": sector_anat if region == "Columna" else f"{sector_anat} {lat}",
+                                "desc": item, 
+                                "val": round(val_num, 2)
+                            })
+                            st.rerun()
+                else:
+                    st.warning("No se encontraron secuelas bajo estos filtros.")
+
+            except Exception as e:
+                st.error(f"Error al procesar la hoja {hoja}. Verificá que tenga 5 columnas (A a E).")
+
+# --- PANEL DE RESULTADOS ---
 if st.session_state.pericia:
     st.subheader("**Detalle del Dictamen (Decreto 549/25)**")
     sumas_regionales = {}
@@ -115,7 +127,7 @@ if st.session_state.pericia:
         if c3.button("🗑️", key=f"del_{i}"):
             st.session_state.pericia.pop(i); st.rerun()
         
-        # Agrupación para aplicación de Topes
+        # Agrupación para aplicación de Topes del Decreto
         r_u = p['reg'].upper()
         if any(x in r_u for x in ["CERVICAL", "DORSAL", "LUMBAR", "SACRO", "COXIS"]):
             llave = "Columna"
