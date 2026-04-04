@@ -3,22 +3,25 @@ import pandas as pd
 import os
 
 # --- Configuración inicial ---
-st.set_page_config(page_title="Calculadora Integral SRT", layout="wide", page_icon="🧮")
+st.set_page_config(page_title="Mega Calculadora SRT", layout="wide", page_icon="🧮")
 
 def format_text(text):
     if not text: return ""
-    text = str(text).strip()
-    return text[0].upper() + text[1:]
+    return str(text).strip()
 
 @st.cache_data
-def cargar_hoja(nombre_hoja):
+def cargar_datos():
     archivo = "calculadora_final_srt.xlsx"
-    try:
-        df = pd.read_excel(archivo, sheet_name=nombre_hoja).fillna("")
-        df.columns = df.columns.str.strip()
-        return df
-    except:
-        return pd.DataFrame()
+    if not os.path.exists(archivo):
+        st.error("No se encontró el archivo Excel.")
+        st.stop()
+    return pd.ExcelFile(archivo)
+
+try:
+    xls = cargar_datos()
+except Exception as e:
+    st.error(f"Error al abrir el Excel: {e}")
+    st.stop()
 
 def balthazard(lista):
     lista = sorted([x for x in lista if x > 0], reverse=True)
@@ -28,15 +31,8 @@ def balthazard(lista):
         total = total + (lista[i] * (100 - total) / 100)
     return round(total, 2)
 
-# FUNCIÓN CRÍTICA: Busca columnas sin importar mayúsculas/minúsculas o acentos
-def encontrar_col(df, palabras_clave):
-    for col in df.columns:
-        if any(p.lower() in str(col).lower() for p in palabras_clave):
-            return col
-    return None
-
-# --- Interfaz principal ---
-st.title("🧮 **Mega Calculadora SRT: Edición Profesional Estable**")
+# --- Interfaz ---
+st.title("🧮 **Mega Calculadora SRT: Edición Estable**")
 st.markdown("---")
 
 if 'pericia' not in st.session_state:
@@ -45,101 +41,96 @@ if 'pericia' not in st.session_state:
 with st.sidebar:
     st.header("**Carga de hallazgos**")
     
-    # 1. REGIÓN MADRE
-    region_madre = st.selectbox("**1. Región**", ["Columna", "Miembro Superior", "Miembro Inferior"], index=None)
+    region = st.selectbox("**1. Región**", ["Columna", "Miembro Superior", "Miembro Inferior"], index=None)
     
-    if region_madre:
-        # 2. LATERALIDAD (Solo para miembros)
-        lat = ""
-        if region_madre != "Columna":
+    if region:
+        # 2. Selección de Hoja
+        if region == "Columna":
+            sub = st.selectbox("**2. Nivel vertebral**", ["Cervical", "Dorsal", "Lumbar", "Sacrococcigea", "Coxis"], index=None)
+            hoja_nombre = sub
+        else:
             lat = st.selectbox("**2. Lateralidad**", ["Derecho", "Izquierdo"], index=None)
-        
-        # 3. SECTOR ANATÓMICO (Orden Descendente)
-        sectores_map = {
-            "Columna": ["Cervical", "Dorsal", "Lumbar", "Sacrococcigea", "Coxis"],
-            "Miembro Superior": ["Hombro", "Brazo", "Codo", "Antebrazo", "Muñeca", "Mano", "Dedos"],
-            "Miembro Inferior": ["Cadera", "Muslo", "Rodilla", "Pierna", "Tobillo", "Pie", "Dedos"]
-        }
-        sector_anat = st.selectbox("**3. Sector anatómico**", sectores_map[region_madre], index=None)
-        
-        if sector_anat and (region_madre == "Columna" or lat):
-            # 4. TIPO DE HALLAZGO
-            hallazgo = st.radio("**4. Tipo de hallazgo**", ["Osteoarticular / Goniometría", "Neurológico / Radicular"])
+            hoja_nombre = f"{region} {lat}"
             
-            hoja_nombre = sector_anat if region_madre == "Columna" else f"{region_madre} {lat}"
-            df_final = cargar_hoja("Neurologia" if "Neurológico" in hallazgo else hoja_nombre)
+        if hoja_nombre in xls.sheet_names:
+            df_hoja = pd.read_excel(xls, sheet_name=hoja_nombre).fillna("")
+            # Limpiamos nombres de columnas para evitar el KeyError
+            df_hoja.columns = df_hoja.columns.str.strip()
+            
+            # 3. Tipo de Hallazgo
+            hallazgo = st.radio("**3. Tipo de hallazgo**", ["Osteoarticular / Goniometría", "Neurológico / Radicular"])
+            
+            if "Neurológico" in hallazgo:
+                df_fil = pd.read_excel(xls, sheet_name="Neurologia").fillna("")
+                df_fil.columns = df_fil.columns.str.strip()
+                kw = hoja_nombre if region == "Columna" else region.split(" ")[1]
+                df_fil = df_fil[df_fil['Apartado'].str.contains(kw, case=False, na=False)]
+            else:
+                df_fil = df_hoja
 
-            if not df_final.empty:
-                # IDENTIFICACIÓN DINÁMICA DE COLUMNAS
-                c_cat = encontrar_col(df_final, ["categor", "apartado"])
-                c_desc = encontrar_col(df_final, ["descrip"])
-                c_inc = encontrar_col(df_final, ["incap", "%"])
-
-                # FILTRADO INTELIGENTE (No borra hernias en columna)
-                if "Neurológico" in hallazgo:
-                    df_final = df_final[df_final[c_cat].str.contains(sector_anat, case=False, na=False)]
-                elif region_madre != "Columna":
-                    # En miembros filtramos por sector. En columna NO para que aparezca TODO (Hernias, etc)
-                    df_final = df_final[df_final[c_cat].str.contains(sector_anat, case=False, na=False) | 
-                                       df_final[c_desc].str.contains(sector_anat, case=False, na=False)]
-
-                # 5. CATEGORÍA
-                categorias = ["Ver todas"] + sorted(df_final[c_cat].unique().tolist())
-                cat_sel = st.selectbox("**5. Categoría**", categorias)
+            if not df_fil.empty:
+                # 4. CATEGORÍA (Usando el nombre exacto de tu Excel: 'Categorias')
+                # Si la columna no existe, avisamos para no romper la app
+                col_cat = "Categorias" if "Categorias" in df_fil.columns else "Apartado"
                 
-                df_items = df_final.copy()
+                lista_cats = ["Ver todas"] + sorted(df_fil[col_cat].unique().tolist())
+                cat_sel = st.selectbox("**4. Categoría**", lista_cats)
+                
+                df_cat = df_fil.copy()
                 if cat_sel != "Ver todas":
-                    df_items = df_items[df_items[c_cat] == cat_sel]
+                    df_cat = df_cat[df_cat[col_cat] == cat_sel]
                 
-                # 6. FILTRO DE MOVIMIENTO (Para goniometría)
+                # 5. MOVIMIENTO (Para achicar la lista de 45 ítems)
                 if any(x in str(cat_sel) for x in ["Anquilosis", "Limitación"]):
-                    movs_ref = ["Flexión", "Extensión", "Inclinación", "Rotación", "Abducción", "Aducción", "Pronación", "Supinación"]
-                    opc_mov = [m for m in movs_ref if df_items[c_desc].str.contains(m, case=False).any()]
+                    movs = ["Flexión", "Extensión", "Inclinación", "Rotación", "Abducción", "Aducción"]
+                    opc_mov = [m for m in movs if df_cat['Descripción de Lesión'].str.contains(m, case=False).any()]
                     if opc_mov:
-                        tipo_mov = st.selectbox("**6. Tipo de movimiento**", opc_mov, index=None)
+                        tipo_mov = st.selectbox("**5. Tipo de movimiento**", opc_mov, index=None)
                         if tipo_mov:
-                            df_items = df_items[df_items[c_desc].str.contains(tipo_mov, case=False)]
+                            df_cat = df_cat[df_cat['Descripción de Lesión'].str.contains(tipo_mov, case=False)]
 
-                # 7. SELECCIÓN FINAL
-                opciones = sorted(df_items[c_desc].unique())
+                # 6. SECUELA ESPECÍFICA
+                opciones = sorted(df_cat['Descripción de Lesión'].unique())
                 if opciones:
-                    item_sel = st.selectbox(f"**7. Secuela específica ({len(opciones)})**", opciones, format_func=format_text, index=None)
+                    item_sel = st.selectbox(f"**6. Secuela ({len(opciones)})**", opciones, format_func=format_text, index=None)
                     
                     if item_sel:
-                        fila = df_items[df_items[c_desc] == item_sel]
-                        valor_raw = fila[c_inc].iloc[0]
+                        fila = df_cat[df_cat['Descripción de Lesión'] == item_sel]
+                        # Nombre exacto de tu columna: '% de Incapacidad Laboral'
+                        valor = fila['% de Incapacidad Laboral'].iloc[0]
                         
-                        # Limpieza segura del valor numérico
+                        # Limpieza de porcentaje (0.05 -> 5.0)
                         try:
-                            valor = float(str(valor_raw).replace('%', '').replace(',', '.'))
-                            if 0 < valor < 1: valor = valor * 100
-                        except: valor = 0.0
-                        
-                        st.success(f"**Valor Baremo: {round(valor, 2)}%**")
-                        
+                            val_num = float(str(valor).replace('%', '').replace(',', '.'))
+                            if 0 < val_num < 1: val_num *= 100
+                        except: val_num = 0.0
+
+                        st.success(f"**Valor: {val_num}%**")
                         if st.button("**AGREGAR A LA PERICIA**"):
                             st.session_state.pericia.append({
-                                "reg": sector_anat if region_madre == "Columna" else f"{sector_anat} {lat}",
-                                "desc": item_sel,
-                                "val": round(valor, 2)
+                                "reg": hoja_nombre, 
+                                "desc": item_sel, 
+                                "val": val_num
                             })
                             st.rerun()
 
-# --- Resultados finales ---
+# --- PANEL DE RESULTADOS ---
 if st.session_state.pericia:
-    st.markdown("---")
     st.subheader("**Detalle del dictamen médico**")
     sumas_seg = {}
     for i, p in enumerate(st.session_state.pericia):
         c1, c2, c3 = st.columns([3, 5, 1])
         c1.write(f"**{p['reg']}**")
-        c2.write(f"{format_text(p['desc'])} ({p['val']}%)")
-        if c3.button("🗑️", key=f"del_{i}"): st.session_state.pericia.pop(i); st.rerun()
+        c2.write(f"{p['desc']} ({p['val']}%)")
+        if c3.button("🗑️", key=f"del_{i}"):
+            st.session_state.pericia.pop(i)
+            st.rerun()
         
+        # Agrupación para topes
         desc_u = p['desc'].upper()
         if "CERVICAL" in p['reg'] or any(x in desc_u for x in ["CERVICAL", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8"]):
             llave = "Columna cervical"
-        elif any(x in p['reg'] for x in ["Dorsal", "Lumbar", "Sacro", "Coxis"]):
+        elif any(x in p['reg'] for x in ["Lumbar", "Dorsal", "Sacro", "Coxis"]):
             llave = "Columna dorsolumbar"
         elif "Superior" in p['reg']:
             llave = "Miembro superior"
@@ -152,19 +143,17 @@ if st.session_state.pericia:
     st.markdown("---")
     l, r = st.columns(2)
     with l:
-        st.write("**Análisis de topes regionales:**")
+        st.write("**Topes regionales:**")
         v_bal = []
         for s, suma in sumas_seg.items():
             t = topes.get(s, 100.0)
             v_f = min(suma, t)
             v_bal.append(v_f)
-            if suma > t: st.warning(f"⚠️ {s}: {suma}% excede el tope de {t}%.")
-            else: st.write(f"✅ {s}: {suma}%")
+            st.write(f"{'✅' if suma <= t else '⚠️'} {s}: {suma}% (Tope: {t}%)")
 
-        st.markdown("### **Factores de ponderación**")
-        u_edad = st.number_input("**Edad del trabajador**", 14, 99, 25)
+        u_edad = st.number_input("**Edad**", 14, 99, 25)
         f_e = 0.05 if u_edad <= 20 else 0.04 if u_edad <= 30 else 0.03 if u_edad <= 40 else 0.02
-        f_d = st.selectbox("**Dificultad para tareas**", [0.05, 0.10, 0.20], format_func=lambda x: f"{int(x*100)}%")
+        f_d = st.selectbox("**Dificultad**", [0.05, 0.10, 0.20], format_func=lambda x: f"{int(x*100)}%")
         
         fis = balthazard(v_bal)
         inc = fis * (f_e + f_d)
@@ -173,6 +162,7 @@ if st.session_state.pericia:
     with r:
         st.metric("**Daño físico residual**", f"{fis}%")
         st.metric("**Factores aplicados**", f"{round(inc, 2)}%")
-        if res_f >= 66.0: st.error(f"## **ILP FINAL: {round(res_f, 2)}% (TOTAL)**")
-        else: st.success(f"## **ILP FINAL: {round(res_f, 2)}% (PARCIAL)**")
-        if st.button("🚨 **BORRAR TODO**"): st.session_state.pericia = []; st.rerun()
+        st.metric("**ILP FINAL**", f"{round(res_f, 2)}%")
+        if st.button("🚨 **BORRAR TODO**"):
+            st.session_state.pericia = []
+            st.rerun()
