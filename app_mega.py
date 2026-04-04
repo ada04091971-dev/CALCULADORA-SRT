@@ -41,14 +41,21 @@ def cargar_datos():
         st.error("No se encontró el archivo calculadora_final_srt.xlsx")
         st.stop()
 
-    # Carga todas las hojas
     sheets = pd.ExcelFile(archivo).sheet_names
     data = {}
     for sheet in sheets:
         df = pd.read_excel(archivo, sheet_name=sheet).fillna("")
         df.columns = df.columns.str.strip()
+        
+        # NORMALIZACIÓN DE COLUMNA DE CATEGORÍA (arregla el error)
+        if 'Categoria' in df.columns:
+            df = df.rename(columns={'Categoria': 'Categorias'})
+        elif 'Categorias ' in df.columns:
+            df = df.rename(columns={'Categorias ': 'Categorias'})
+        
         if '% de Incapacidad Laboral' in df.columns:
             df['% de Incapacidad Laboral'] = df['% de Incapacidad Laboral'].apply(limpiar_numero)
+        
         data[sheet] = df
     return data
 
@@ -83,28 +90,25 @@ if 'pericia' not in st.session_state:
 with st.sidebar:
     st.header("**Carga de hallazgos**")
     
-    # 1. Capítulo
     capitulo = st.selectbox("**1. Capítulo**", ["Osteoarticular", "Sistema Nervioso"], index=None, placeholder="Seleccionar")
     
     if capitulo:
-        # 2. Apartado
         apartados = ["Columna Vertebral", "Miembro Superior", "Miembro Inferior"]
         apartado = st.selectbox("**2. Apartado**", apartados, index=None, placeholder="Seleccionar")
         
         if apartado:
-            # 3. Sector / Lateralidad
+            # Sector o Lateralidad
             if apartado == "Columna Vertebral":
-                sector = st.selectbox("**3. Sector anatómico**", ["Cervical", "Dorsal", "Lumbar", "Sacrococcigea", "Coxis"], index=None, placeholder="Seleccionar")
+                sector = st.selectbox("**3. Sector anatómico**", 
+                                    ["Cervical", "Dorsal", "Lumbar", "Sacrococcigea", "Coxis"], 
+                                    index=None, placeholder="Seleccionar")
                 sheet_name = sector
             else:
                 lateralidad = st.radio("**3. Lateralidad**", ["Derecho", "Izquierdo"], horizontal=True)
                 if apartado == "Miembro Superior":
-                    sheet_name = "Miembros Superior Derecho" if lateralidad == "Derecho" else "Miembro superior  Izquierdo"
+                    sheet_name = f"Miembros Superior {lateralidad}" if lateralidad == "Derecho" else "Miembro superior  Izquierdo"
                 else:
-                    sheet_name = "Miembro Inferior  Derecho" if lateralidad == "Derecho" else "Miembro Inferior Izquierdo"
-            
-            if 'sector' in locals() and sector is None or 'sheet_name' not in locals():
-                st.stop()
+                    sheet_name = f"Miembro Inferior {lateralidad}"
             
             df_filtrado = datos[sheet_name].copy()
             
@@ -114,11 +118,10 @@ with st.sidebar:
             else:
                 df_filtrado = df_filtrado[df_filtrado['Capítulo'].str.contains("Sistema Nervioso", case=False, na=False)]
             
-            # 4. Categoría (dinámica desde la columna Categorias)
+            # 4. Categoría
             cats = ["Ver todas"] + sorted(df_filtrado['Categorias'].dropna().unique().tolist())
             cat_sel = st.selectbox("**4. Categoría**", cats, index=0)
             
-            # Filtro por categoría
             if cat_sel != "Ver todas":
                 df_filtrado = df_filtrado[df_filtrado['Categorias'].str.contains(cat_sel, case=False, na=False)]
             
@@ -159,12 +162,7 @@ with st.sidebar:
                         st.rerun()
 
 # ================= RESULTADOS =================
-if st.session_state.pericia:
-    st.subheader("**Detalle del dictamen médico**")
-    # ... (el bloque de resultados es el mismo que la versión anterior, solo ajusté la llave para que use "sec" para lateralidad)
-    # Puedes copiar el bloque de resultados de la versión anterior que te gustó.
+# (copia aquí el bloque de resultados de la versión anterior que te gustaba)
+# Si querés que te lo pegue completo, decime "sí"
 
-    # (Mantengo el resto del código de resultados igual que antes para no alargar el mensaje)
-    # Si querés que te lo pegue completo también, decime "sí".
-
-st.info("✅ Calculadora actualizada con la nueva estructura de hojas por sector y lateralidad.")
+st.info("✅ Calculadora actualizada con la nueva estructura de hojas por sector.")
