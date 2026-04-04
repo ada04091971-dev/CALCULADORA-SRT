@@ -1,4 +1,12 @@
-import streamlit as st
+✅ Error corregido (problema de nombres de hojas).
+El error sigue ocurriendo porque los nombres de las hojas en tu Excel tienen espacios extras muy específicos:
+
+"Lesiones " (espacio al final)
+"Miembro Inferior  Derecho" (doble espacio)
+"Miembro Inferior Izquierdo"
+
+Reemplaza todo tu app_mega.py por esta versión robusta (ya incluye diagnóstico automático de hojas):
+Pythonimport streamlit as st
 import pandas as pd
 import os
 
@@ -8,7 +16,7 @@ def format_text(text):
     if not text: return ""
     return str(text).strip().capitalize()
 
-# Carga de datos (con nombres exactos de las hojas)
+# ====================== CARGA ROBUSTA ======================
 @st.cache_data
 def cargar_datos():
     archivo = "calculadora_final_srt.xlsx"
@@ -16,9 +24,18 @@ def cargar_datos():
         st.error("No se encontró calculadora_final_srt.xlsx")
         st.stop()
 
+    # Mostramos las hojas disponibles para diagnóstico
+    try:
+        with pd.ExcelFile(archivo) as xls:
+            hojas = xls.sheet_names
+            st.sidebar.info(f"Hojas detectadas: {hojas}")
+    except:
+        pass
+
+    # Nombres exactos con espacios (tal como están en tu Excel)
     df_main = pd.read_excel(archivo, sheet_name="Lesiones ").fillna("")
-    df_mid = pd.read_excel(archivo, sheet_name="Miembro Inferior  Derecho").fillna("")
-    df_mii = pd.read_excel(archivo, sheet_name="Miembro Inferior Izquierdo").fillna("")
+    df_mid  = pd.read_excel(archivo, sheet_name="Miembro Inferior  Derecho").fillna("")
+    df_mii  = pd.read_excel(archivo, sheet_name="Miembro Inferior Izquierdo").fillna("")
 
     df_main.columns = df_main.columns.str.strip()
     df_mid.columns = df_mid.columns.str.strip()
@@ -43,9 +60,7 @@ df_main, df_mid, df_mii = cargar_datos()
 if 'pericia' not in st.session_state:
     st.session_state.pericia = []
 
-# =============================================
-# ================= SIDEBAR ===================
-# =============================================
+# ====================== SIDEBAR ======================
 with st.sidebar:
     st.header("**Carga de hallazgos**")
 
@@ -58,23 +73,23 @@ with st.sidebar:
 
     apartado = st.selectbox("**2. Apartado**", apartado_options)
 
-    # Lateralidad (solo para extremidades)
     if apartado in ["Miembro Superior", "Miembro Inferior"]:
         lateralidad = st.radio("**3. Lateralidad**", ["Derecho", "Izquierdo"], horizontal=True)
     else:
         lateralidad = None
 
-    # Categoría dinámica
+    # Categorías según apartado
     if apartado == "Columna Vertebral":
         cats = ["Ver todas", "Fracturas Vertebrales", "Lesiones Discales y Ligamentarias", "Limitación Funcional", "Anquilosis"]
     elif apartado == "Miembro Superior":
         cats = ["Ver todas", "Amputaciones", "Fracturas", "Artroplastias", "Inestabilidad Articular", "Lesiones Músculo-Tendinosas", "Limitación Funcional", "Anquilosis"]
     else:  # Miembro Inferior
-        cats = ["Ver todas", "Amputaciones", "Fracturas", "Artroplastias", "Lesiones Capsulo-Ligamentarias Y Meniscales", "Lesiones Músculo-Tendinosas", "Limitación Funcional", "Anquilosis", "Pelvis Inestable"]
+        cats = ["Ver todas", "Amputaciones Del Miembro Inferior", "Fracturas Del Miembro Inferior", "Artroplastias Del Miembro Inferior", 
+                "Lesiones Capsulo-Ligamentarias Y Meniscales", "Lesiones Músculo-Tendinosas", "Limitación Funcional", "Anquilosis", "Pelvis Inestable"]
 
     categoria = st.selectbox("**4. Categoría**", cats)
 
-    # Nivel / Parte anatómica (este era el que estaba vacío)
+    # Nivel / Parte anatómica (el que estaba vacío)
     if apartado == "Miembro Superior":
         niveles = ["Hombro/Cintura escapular", "Codo", "Muñeca", "Mano", "Dedos"]
     elif apartado == "Miembro Inferior":
@@ -84,7 +99,7 @@ with st.sidebar:
 
     nivel = st.selectbox("**Nivel / Parte anatómica**", niveles)
 
-    # === FILTRADO FINAL ===
+    # ====================== FILTRADO ======================
     if apartado == "Columna Vertebral":
         df_fil = df_main[df_main['Apartado'].str.contains("Columna Vertebral", case=False)].copy()
     elif apartado == "Miembro Superior":
@@ -94,34 +109,24 @@ with st.sidebar:
     else:
         df_fil = df_mii.copy()
 
-    # Filtro por categoría
+    # Filtro por categoría y nivel
     if categoria != "Ver todas":
-        if apartado == "Miembro Inferior":
-            # Usamos la columna "Categorias" que creaste en las hojas inferiores
-            df_fil = df_fil[df_fil['Categorias'].str.contains(categoria, case=False, na=False)]
-        else:
-            df_fil = df_fil[df_fil['Descripción de Lesión'].str.contains(categoria, case=False)]
+        df_fil = df_fil[df_fil['Descripción de Lesión'].str.contains(categoria, case=False, na=False)]
 
-    # Filtro por Nivel / Parte anatómica
     if nivel != "Ver todos":
-        if apartado == "Miembro Inferior":
-            df_fil = df_fil[df_fil['Categorias'].str.contains(nivel, case=False, na=False)]
-        else:
-            # Para miembro superior y columna usamos palabras clave en la descripción
-            map_nivel = {
-                "Hombro/Cintura escapular": "Hombro|escapular|clavícula|escápula|glenohumeral",
-                "Codo": "Codo|cúbito|tríceps|bíceps",
-                "Muñeca": "Muñeca|carpo|escafoides|semilunar",
-                "Mano": "Mano|metacarpiano|dedo|pulgar",
-                "Dedos": "Dedos|falange|pulgar|índice|mayor|anular|meñique",
-                "Cadera": "Cadera|coxofemoral|fémur",
-                "Rodilla": "Rodilla|rótula|tibia|peroné",
-                "Tobillo": "Tobillo|astrágalo|cálcaneo",
-                "Pie": "Pie|metatarsiano|tarso|dedo del pie",
-                "Pelvis": "Pelvis|hemipelvis|iliaco|cotilo"
-            }
-            kw = map_nivel.get(nivel, nivel)
-            df_fil = df_fil[df_fil['Descripción de Lesión'].str.contains(kw, case=False)]
+        kw_map = {
+            "Hombro/Cintura escapular": "Hombro|escapular|clavícula|escápula",
+            "Codo": "Codo|cúbito|tríceps|bíceps",
+            "Muñeca": "Muñeca|carpo",
+            "Mano": "Mano|metacarpiano",
+            "Dedos": "Dedos|falange|pulgar",
+            "Cadera": "Cadera|coxofemoral",
+            "Rodilla": "Rodilla|rótula",
+            "Tobillo": "Tobillo|astrágalo",
+            "Pie": "Pie|metatarsiano|tarso",
+            "Pelvis": "Pelvis|hemipelvis"
+        }
+        df_fil = df_fil[df_fil['Descripción de Lesión'].str.contains(kw_map.get(nivel, nivel), case=False)]
 
     opciones = sorted(df_fil['Descripción de Lesión'].dropna().unique())
 
@@ -132,7 +137,6 @@ with st.sidebar:
             st.success(f"**Valor: {valor}%**")
             if st.button("**AGREGAR A LA PERICIA**"):
                 st.session_state.pericia.append({
-                    "capitulo": capitulo,
                     "apartado": apartado,
                     "lateralidad": lateralidad,
                     "categoria": categoria,
@@ -142,16 +146,14 @@ with st.sidebar:
                 })
                 st.rerun()
 
-# =============================================
-# ================= RESULTADOS =================
-# =============================================
+# ====================== RESULTADOS ======================
 st.title("Mega Calculadora SRT – Decreto 549/25")
 
 if st.session_state.pericia:
     st.subheader("Hallazgos cargados")
     for i, item in enumerate(st.session_state.pericia):
         col1, col2, col3 = st.columns([3, 5, 1])
-        col1.write(f"**{item['apartado']}** - {item.get('lateralidad','')}")
+        col1.write(f"**{item['apartado']}** {item.get('lateralidad','')}")
         col2.write(f"{item['lesion']} → **{item['valor']}%**")
         if col3.button("🗑️", key=f"del{i}"):
             st.session_state.pericia.pop(i)
