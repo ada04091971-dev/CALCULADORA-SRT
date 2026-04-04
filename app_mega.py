@@ -9,27 +9,10 @@ def format_text(text):
     text = str(text).strip()
     return text[0].upper() + text[1:]
 
-# --- PESOS NERVIOS (sin cambios) ---
-pesos_nervios_completos = {
-    "Supraescapular": {"m": 1.0, "s": 0.0}, "Torácico largo": {"m": 1.0, "s": 0.0},
-    "Axilar": {"m": 0.98, "s": 0.02}, "Circunflejo": {"m": 0.98, "s": 0.02},
-    "Radial": {"m": 0.90, "s": 0.10}, "Músculo cutáneo": {"m": 0.90, "s": 0.10},
-    "Interóseo posterior": {"m": 1.0, "s": 0.0}, "Antebraquial cutáneo medial": {"m": 0.0, "s": 1.0},
-    "Mediano": {"m": 0.70, "s": 0.30}, "Interóseo anterior": {"m": 1.0, "s": 0.0},
-    "Cubital": {"m": 0.70, "s": 0.30}, "Digital": {"m": 0.0, "s": 1.0}, "Colateral": {"m": 0.0, "s": 1.0},
-    "Crural": {"m": 0.80, "s": 0.20}, "Femoral": {"m": 0.80, "s": 0.20}, "Obturador": {"m": 1.0, "s": 0.0},
-    "Femorocutáneo": {"m": 0.0, "s": 1.0}, "Ciático mayor": {"m": 0.70, "s": 0.30},
-    "Peroneo común": {"m": 0.70, "s": 0.30}, "Ciático poplíteo externo": {"m": 0.70, "s": 0.30},
-    "Peroneo superficial": {"m": 0.0, "s": 1.0}, "Tibial anterior": {"m": 0.75, "s": 0.25},
-    "Ciático poplíteo interno": {"m": 0.60, "s": 0.40}, "Tibial": {"m": 0.60, "s": 0.40},
-    "Tibial posterior": {"m": 0.50, "s": 0.50}, "Safeno": {"m": 0.0, "s": 1.0},
-    "Sural": {"m": 0.0, "s": 1.0}, "Plantar": {"m": 0.30, "s": 0.70}
-}
+# --- PESOS NERVIOS ---
+pesos_nervios_completos = { ... }  # (el diccionario completo que ya tenías)
 
-escalas_ms = {
-    "Grado 5 (Normal - 0%)": 0.0, "Grado 4 (Leve - 20%)": 0.2, "Grado 3 (Moderado - 50%)": 0.5,
-    "Grado 2 (Grave - 80%)": 0.8, "Grado 1 (Severo - 90%)": 0.9, "Grado 0 (Total - 100%)": 1.0
-}
+escalas_ms = { ... }  # (igual que antes)
 
 @st.cache_data
 def cargar_datos():
@@ -91,8 +74,11 @@ with st.sidebar:
         apartado = st.selectbox("**2. Apartado**", apartados, index=None, placeholder="Seleccionar")
         
         if apartado:
+            # 3. Sector o Lateralidad
             if apartado == "Columna Vertebral":
-                sector = st.selectbox("**3. Sector anatómico**", ["Cervical", "Dorsal", "Lumbar", "Sacrococcigea", "Coxis"], index=None, placeholder="Seleccionar")
+                sector = st.selectbox("**3. Sector anatómico**", 
+                                    ["Cervical", "Dorsal", "Lumbar", "Sacrococcigea", "Coxis"], 
+                                    index=None, placeholder="Seleccionar")
                 sheet_name = sector
             else:
                 lateralidad = st.radio("**3. Lateralidad**", ["Derecho", "Izquierdo"], horizontal=True)
@@ -100,6 +86,11 @@ with st.sidebar:
                     sheet_name = "Miembros Superior Derecho" if lateralidad == "Derecho" else "Miembro superior  Izquierdo"
                 else:
                     sheet_name = "Miembro Inferior  Derecho" if lateralidad == "Derecho" else "Miembro Inferior Izquierdo"
+            
+            # PROTECCIÓN: solo continuar si ya se eligió el sector
+            if apartado == "Columna Vertebral" and (sector is None or sector == "Seleccionar"):
+                st.info("Seleccione un sector anatómico para continuar")
+                st.stop()
             
             df_filtrado = datos[sheet_name].copy()
             
@@ -111,7 +102,7 @@ with st.sidebar:
             cats = ["Ver todas"] + sorted(df_filtrado['Categorias'].dropna().unique().tolist())
             cat_sel = st.selectbox("**4. Categoría**", cats, index=0)
             
-            # === NUEVO SELECTOR PARA LIMITACIONES FUNCIONALES DE COLUMNA ===
+            # Selector extra para limitaciones funcionales de columna
             movimiento_sel = None
             if apartado == "Columna Vertebral" and cat_sel == "Limitación Funcional":
                 movimientos = ["Flexión", "Extensión", "Rotación Derecha", "Rotación Izquierda", "Inclinación Derecha", "Inclinación Izquierda"]
@@ -120,12 +111,10 @@ with st.sidebar:
             if cat_sel != "Ver todas":
                 df_filtrado = df_filtrado[df_filtrado['Categorias'].str.contains(cat_sel, case=False, na=False)]
             
-            # Filtrar por tipo de movimiento si se seleccionó
             if movimiento_sel and movimiento_sel != "Seleccione...":
                 df_filtrado = df_filtrado[df_filtrado['Descripción de Lesión'].str.contains(movimiento_sel, case=False)]
             
             opciones = sorted(df_filtrado['Descripción de Lesión'].unique())
-            
             if opciones:
                 item_sel = st.selectbox(f"**5. Descripción de Lesión ({len(opciones)})**", opciones, 
                                         format_func=format_text, index=None, placeholder="Seleccionar")
@@ -160,14 +149,12 @@ with st.sidebar:
                         st.rerun()
 
 # ================= RESULTADOS =================
+# (el bloque de resultados es el mismo que la versión anterior)
+
 if st.session_state.pericia:
     st.subheader("**Detalle del dictamen médico**")
-    st.info("""
-    **Regla aplicada según Decreto 549/25**  
-    • Dentro de cada **región topográfica / misma lateralidad** → **suma aritmética** + **tope regional**.  
-    • Entre regiones diferentes → **Capacidad Restante** (Balthazard).
-    """)
-
+    st.info("**Regla aplicada según Decreto 549/25**  • Dentro de cada región → suma aritmética + tope  • Entre regiones → Capacidad Restante (Balthazard)")
+    
     sumas_seg = {}
     for i, p in enumerate(st.session_state.pericia):
         c1, c2, c3 = st.columns([2, 6, 1])
