@@ -28,6 +28,13 @@ def balthazard(lista):
         total = total + (lista[i] * (100 - total) / 100)
     return round(total, 2)
 
+# FUNCIÓN CRÍTICA: Busca columnas sin importar mayúsculas/minúsculas o acentos
+def encontrar_col(df, palabras_clave):
+    for col in df.columns:
+        if any(p.lower() in str(col).lower() for p in palabras_clave):
+            return col
+    return None
+
 # --- Interfaz principal ---
 st.title("🧮 **Mega Calculadora SRT: Edición Profesional Estable**")
 st.markdown("---")
@@ -38,66 +45,87 @@ if 'pericia' not in st.session_state:
 with st.sidebar:
     st.header("**Carga de hallazgos**")
     
-    # 1. REGIÓN
+    # 1. REGIÓN MADRE
     region_madre = st.selectbox("**1. Región**", ["Columna", "Miembro Superior", "Miembro Inferior"], index=None)
     
     if region_madre:
-        # 2. SECTOR O LATERALIDAD
-        if region_madre == "Columna":
-            sector_col = st.selectbox("**2. Nivel vertebral**", ["Cervical", "Dorsal", "Lumbar", "Sacrococcigea", "Coxis"], index=None)
-            hoja_nombre = sector_col
-            sector_anat = sector_col
-        else:
+        # 2. LATERALIDAD (Solo para miembros)
+        lat = ""
+        if region_madre != "Columna":
             lat = st.selectbox("**2. Lateralidad**", ["Derecho", "Izquierdo"], index=None)
-            sectores_m = ["Hombro", "Brazo", "Codo", "Antebrazo", "Muñeca", "Mano", "Dedos"] if "Superior" in region_madre else ["Cadera", "Muslo", "Rodilla", "Pierna", "Tobillo", "Pie", "Dedos"]
-            sector_anat = st.selectbox("**3. Sector anatómico**", sectores_m, index=None)
-            hoja_nombre = f"{region_madre} {lat}"
-            
+        
+        # 3. SECTOR ANATÓMICO (Orden Descendente)
+        sectores_map = {
+            "Columna": ["Cervical", "Dorsal", "Lumbar", "Sacrococcigea", "Coxis"],
+            "Miembro Superior": ["Hombro", "Brazo", "Codo", "Antebrazo", "Muñeca", "Mano", "Dedos"],
+            "Miembro Inferior": ["Cadera", "Muslo", "Rodilla", "Pierna", "Tobillo", "Pie", "Dedos"]
+        }
+        sector_anat = st.selectbox("**3. Sector anatómico**", sectores_map[region_madre], index=None)
+        
         if sector_anat and (region_madre == "Columna" or lat):
-            # 3. HALLAZGO
+            # 4. TIPO DE HALLAZGO
             hallazgo = st.radio("**4. Tipo de hallazgo**", ["Osteoarticular / Goniometría", "Neurológico / Radicular"])
             
+            hoja_nombre = sector_anat if region_madre == "Columna" else f"{region_madre} {lat}"
             df_final = cargar_hoja("Neurologia" if "Neurológico" in hallazgo else hoja_nombre)
 
             if not df_final.empty:
-                # FILTRO DE SEGURIDAD (Para no borrar Hernias ni Apófisis en Columna)
-                if "Neurológico" in hallazgo:
-                    kw = sector_anat if region_madre == "Columna" else ("Superior" if "Superior" in region_madre else "Inferior")
-                    df_final = df_final[df_final['Apartado'].str.contains(kw, case=False, na=False)]
-                elif region_madre != "Columna":
-                    # Solo filtramos por sector (Hombro, Rodilla) si NO es columna
-                    df_final = df_final[df_final['Categoría'].str.contains(sector_anat, case=False, na=False) | 
-                                       df_final['Descripción de lesión'].str.contains(sector_anat, case=False, na=False)]
+                # IDENTIFICACIÓN DINÁMICA DE COLUMNAS
+                c_cat = encontrar_col(df_final, ["categor", "apartado"])
+                c_desc = encontrar_col(df_final, ["descrip"])
+                c_inc = encontrar_col(df_final, ["incap", "%"])
 
-                # 4. CATEGORÍA
-                categorias = ["Ver todas"] + sorted(df_final['Categoría'].unique().tolist())
+                # FILTRADO INTELIGENTE (No borra hernias en columna)
+                if "Neurológico" in hallazgo:
+                    df_final = df_final[df_final[c_cat].str.contains(sector_anat, case=False, na=False)]
+                elif region_madre != "Columna":
+                    # En miembros filtramos por sector. En columna NO para que aparezca TODO (Hernias, etc)
+                    df_final = df_final[df_final[c_cat].str.contains(sector_anat, case=False, na=False) | 
+                                       df_final[c_desc].str.contains(sector_anat, case=False, na=False)]
+
+                # 5. CATEGORÍA
+                categorias = ["Ver todas"] + sorted(df_final[c_cat].unique().tolist())
                 cat_sel = st.selectbox("**5. Categoría**", categorias)
                 
                 df_items = df_final.copy()
                 if cat_sel != "Ver todas":
-                    df_items = df_items[df_items['Categoría'] == cat_sel]
+                    df_items = df_items[df_items[c_cat] == cat_sel]
                 
-                # 5. MOVIMIENTOS (Solo si es goniometría)
+                # 6. FILTRO DE MOVIMIENTO (Para goniometría)
                 if any(x in str(cat_sel) for x in ["Anquilosis", "Limitación"]):
                     movs_ref = ["Flexión", "Extensión", "Inclinación", "Rotación", "Abducción", "Aducción", "Pronación", "Supinación"]
-                    opc_mov = [m for m in movs_ref if df_items['Descripción de lesión'].str.contains(m, case=False).any()]
+                    opc_mov = [m for m in movs_ref if df_items[c_desc].str.contains(m, case=False).any()]
                     if opc_mov:
                         tipo_mov = st.selectbox("**6. Tipo de movimiento**", opc_mov, index=None)
                         if tipo_mov:
-                            df_items = df_items[df_items['Descripción de lesión'].str.contains(tipo_mov, case=False)]
+                            df_items = df_items[df_items[c_desc].str.contains(tipo_mov, case=False)]
 
-                # 6. SELECCIÓN FINAL
-                opciones = sorted(df_items['Descripción de lesión'].unique())
+                # 7. SELECCIÓN FINAL
+                opciones = sorted(df_items[c_desc].unique())
                 if opciones:
                     item_sel = st.selectbox(f"**7. Secuela específica ({len(opciones)})**", opciones, format_func=format_text, index=None)
+                    
                     if item_sel:
-                        valor = df_items[df_items['Descripción de lesión'] == item_sel]['% de incapacidad laboral'].iloc[0]
-                        st.success(f"**Valor Baremo: {valor}%**")
+                        fila = df_items[df_items[c_desc] == item_sel]
+                        valor_raw = fila[c_inc].iloc[0]
+                        
+                        # Limpieza segura del valor numérico
+                        try:
+                            valor = float(str(valor_raw).replace('%', '').replace(',', '.'))
+                            if 0 < valor < 1: valor = valor * 100
+                        except: valor = 0.0
+                        
+                        st.success(f"**Valor Baremo: {round(valor, 2)}%**")
+                        
                         if st.button("**AGREGAR A LA PERICIA**"):
-                            st.session_state.pericia.append({"reg": sector_anat if region_madre == "Columna" else f"{sector_anat} {lat}", "desc": item_sel, "val": valor})
+                            st.session_state.pericia.append({
+                                "reg": sector_anat if region_madre == "Columna" else f"{sector_anat} {lat}",
+                                "desc": item_sel,
+                                "val": round(valor, 2)
+                            })
                             st.rerun()
 
-# --- Resultados ---
+# --- Resultados finales ---
 if st.session_state.pericia:
     st.markdown("---")
     st.subheader("**Detalle del dictamen médico**")
@@ -108,13 +136,12 @@ if st.session_state.pericia:
         c2.write(f"{format_text(p['desc'])} ({p['val']}%)")
         if c3.button("🗑️", key=f"del_{i}"): st.session_state.pericia.pop(i); st.rerun()
         
-        # Topes (Decreto 549/25)
         desc_u = p['desc'].upper()
         if "CERVICAL" in p['reg'] or any(x in desc_u for x in ["CERVICAL", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8"]):
             llave = "Columna cervical"
-        elif any(x in p['reg'] for x in ["Lumbar", "Dorsal", "Sacro", "Coxis"]) or "COLUMNA" in p['reg'].upper():
+        elif any(x in p['reg'] for x in ["Dorsal", "Lumbar", "Sacro", "Coxis"]):
             llave = "Columna dorsolumbar"
-        elif "SUPERIOR" in p['reg'].upper() or any(x in p['reg'] for x in ["Hombro", "Codo", "Mano"]):
+        elif "Superior" in p['reg']:
             llave = "Miembro superior"
         else:
             llave = "Miembro inferior"
