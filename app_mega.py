@@ -1,4 +1,4 @@
-import streamlit as st
+mport streamlit as st
 import pandas as pd
 import os
 
@@ -8,7 +8,7 @@ def format_text(text):
     if not text: return ""
     return str(text).strip().capitalize()
 
-# ====================== CARGA ROBUSTA ======================
+# ====================== CARGA DE DATOS (nueva estructura) ======================
 @st.cache_data
 def cargar_datos():
     archivo = "calculadora_final_srt.xlsx"
@@ -16,23 +16,25 @@ def cargar_datos():
         st.error("No se encontró calculadora_final_srt.xlsx")
         st.stop()
 
-    # Mostramos las hojas disponibles para diagnóstico
-    try:
-        with pd.ExcelFile(archivo) as xls:
-            hojas = xls.sheet_names
-            st.sidebar.info(f"Hojas detectadas: {hojas}")
-    except:
-        pass
+    # Diagnóstico (puedes borrarlo después si querés)
+    with pd.ExcelFile(archivo) as xls:
+        st.sidebar.info(f"Hojas detectadas: {xls.sheet_names}")
 
-    # Nombres exactos con espacios (tal como están en tu Excel)
-    df_main = pd.read_excel(archivo, sheet_name="Lesiones ").fillna("")
-    df_mid  = pd.read_excel(archivo, sheet_name="Miembro Inferior  Derecho").fillna("")
-    df_mii  = pd.read_excel(archivo, sheet_name="Miembro Inferior Izquierdo").fillna("")
+    # Cargamos todas las hojas que existen ahora
+    sheets = {
+        "Cervical": pd.read_excel(archivo, sheet_name="Cervical").fillna(""),
+        "Dorsal": pd.read_excel(archivo, sheet_name="Dorsal").fillna(""),
+        "Lumbar": pd.read_excel(archivo, sheet_name="Lumbar").fillna(""),
+        "Sacrococcigea": pd.read_excel(archivo, sheet_name="Sacrococcigea").fillna(""),
+        "Coxis": pd.read_excel(archivo, sheet_name="Coxis").fillna(""),
+        "Miembros Superior Derecho": pd.read_excel(archivo, sheet_name="Miembros Superior Derecho").fillna(""),
+        "Miembro superior Izquierdo": pd.read_excel(archivo, sheet_name="Miembro superior Izquierdo").fillna(""),
+        "Miembro Inferior Derecho": pd.read_excel(archivo, sheet_name="Miembro Inferior Derecho").fillna(""),
+        "Miembro Inferior Izquierdo": pd.read_excel(archivo, sheet_name="Miembro Inferior Izquierdo").fillna(""),
+        "Neurologia": pd.read_excel(archivo, sheet_name="Neurologia").fillna(""),
+    }
 
-    df_main.columns = df_main.columns.str.strip()
-    df_mid.columns = df_mid.columns.str.strip()
-    df_mii.columns = df_mii.columns.str.strip()
-
+    # Limpiar nombres de columnas y porcentajes
     def limpiar(val):
         try:
             if isinstance(val, str):
@@ -41,13 +43,14 @@ def cargar_datos():
         except:
             return 0.0
 
-    for df in [df_main, df_mid, df_mii]:
+    for df in sheets.values():
+        df.columns = df.columns.str.strip()
         if "% de Incapacidad Laboral" in df.columns:
             df["% de Incapacidad Laboral"] = df["% de Incapacidad Laboral"].apply(limpiar)
 
-    return df_main, df_mid, df_mii
+    return sheets
 
-df_main, df_mid, df_mii = cargar_datos()
+sheets = cargar_datos()
 
 if 'pericia' not in st.session_state:
     st.session_state.pericia = []
@@ -59,30 +62,32 @@ with st.sidebar:
     capitulo = st.selectbox("**1. Capítulo**", ["Osteoarticular", "Sistema Nervioso"], index=0)
 
     if capitulo == "Osteoarticular":
-        apartado_options = ["Columna Vertebral", "Miembro Superior", "Miembro Inferior"]
+        apartado = st.selectbox("**2. Apartado**", ["Columna Vertebral", "Miembro Superior", "Miembro Inferior"])
     else:
-        apartado_options = ["Columna Vertebral", "Miembro Superior", "Miembro Inferior"]
-
-    apartado = st.selectbox("**2. Apartado**", apartado_options)
+        apartado = "Neurologia"
 
     if apartado in ["Miembro Superior", "Miembro Inferior"]:
         lateralidad = st.radio("**3. Lateralidad**", ["Derecho", "Izquierdo"], horizontal=True)
     else:
         lateralidad = None
 
-    # Categorías según apartado
+    # Categoría
     if apartado == "Columna Vertebral":
         cats = ["Ver todas", "Fracturas Vertebrales", "Lesiones Discales y Ligamentarias", "Limitación Funcional", "Anquilosis"]
     elif apartado == "Miembro Superior":
         cats = ["Ver todas", "Amputaciones", "Fracturas", "Artroplastias", "Inestabilidad Articular", "Lesiones Músculo-Tendinosas", "Limitación Funcional", "Anquilosis"]
-    else:  # Miembro Inferior
+    elif apartado == "Miembro Inferior":
         cats = ["Ver todas", "Amputaciones Del Miembro Inferior", "Fracturas Del Miembro Inferior", "Artroplastias Del Miembro Inferior", 
                 "Lesiones Capsulo-Ligamentarias Y Meniscales", "Lesiones Músculo-Tendinosas", "Limitación Funcional", "Anquilosis", "Pelvis Inestable"]
+    else:
+        cats = ["Ver todas"]
 
     categoria = st.selectbox("**4. Categoría**", cats)
 
-    # Nivel / Parte anatómica (el que estaba vacío)
-    if apartado == "Miembro Superior":
+    # Nivel / Parte anatómica (ahora selecciona la hoja correcta)
+    if apartado == "Columna Vertebral":
+        niveles = ["Cervical", "Dorsal", "Lumbar", "Sacrococcigea", "Coxis"]
+    elif apartado == "Miembro Superior":
         niveles = ["Hombro/Cintura escapular", "Codo", "Muñeca", "Mano", "Dedos"]
     elif apartado == "Miembro Inferior":
         niveles = ["Cadera", "Rodilla", "Tobillo", "Pie", "Pelvis"]
@@ -93,33 +98,22 @@ with st.sidebar:
 
     # ====================== FILTRADO ======================
     if apartado == "Columna Vertebral":
-        df_fil = df_main[df_main['Apartado'].str.contains("Columna Vertebral", case=False)].copy()
+        sheet_name = nivel
+        df_fil = sheets.get(sheet_name, pd.DataFrame())
     elif apartado == "Miembro Superior":
-        df_fil = df_main[df_main['Apartado'].str.contains("Miembro Superior", case=False)].copy()
-    elif apartado == "Miembro Inferior" and lateralidad == "Derecho":
-        df_fil = df_mid.copy()
-    else:
-        df_fil = df_mii.copy()
+        sheet_name = "Miembros Superior Derecho" if lateralidad == "Derecho" else "Miembro superior Izquierdo"
+        df_fil = sheets.get(sheet_name, pd.DataFrame())
+    elif apartado == "Miembro Inferior":
+        sheet_name = "Miembro Inferior Derecho" if lateralidad == "Derecho" else "Miembro Inferior Izquierdo"
+        df_fil = sheets.get(sheet_name, pd.DataFrame())
+    else:  # Neurologia
+        df_fil = sheets.get("Neurologia", pd.DataFrame())
 
-    # Filtro por categoría y nivel
+    # Filtro por categoría
     if categoria != "Ver todas":
         df_fil = df_fil[df_fil['Descripción de Lesión'].str.contains(categoria, case=False, na=False)]
 
-    if nivel != "Ver todos":
-        kw_map = {
-            "Hombro/Cintura escapular": "Hombro|escapular|clavícula|escápula",
-            "Codo": "Codo|cúbito|tríceps|bíceps",
-            "Muñeca": "Muñeca|carpo",
-            "Mano": "Mano|metacarpiano",
-            "Dedos": "Dedos|falange|pulgar",
-            "Cadera": "Cadera|coxofemoral",
-            "Rodilla": "Rodilla|rótula",
-            "Tobillo": "Tobillo|astrágalo",
-            "Pie": "Pie|metatarsiano|tarso",
-            "Pelvis": "Pelvis|hemipelvis"
-        }
-        df_fil = df_fil[df_fil['Descripción de Lesión'].str.contains(kw_map.get(nivel, nivel), case=False)]
-
+    # Opciones finales
     opciones = sorted(df_fil['Descripción de Lesión'].dropna().unique())
 
     if opciones:
