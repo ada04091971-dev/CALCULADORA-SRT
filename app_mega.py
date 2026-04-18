@@ -7,8 +7,7 @@ st.set_page_config(page_title="Calculadora laboral SRT", layout="wide", page_ico
 
 def format_text(text):
     if not text: return ""
-    text = str(text).strip()
-    return text
+    return str(text).strip()
 
 @st.cache_resource
 def abrir_excel():
@@ -39,36 +38,54 @@ xls = abrir_excel()
 with st.sidebar:
     st.header("**Carga de hallazgos**")
     
-    region_sel = st.selectbox("**1. Región Topográfica**", ["Columna", "Miembro Superior", "Miembro Inferior"], index=None)
+    # 1. Región Topográfica
+    region_sel = st.selectbox(
+        "**1. Región Topográfica**", 
+        ["Columna", "Miembro Superior", "Miembro Inferior"], 
+        index=None, 
+        placeholder="Elegir opción"
+    )
     
     if region_sel:
+        # 2. Sector y Lateralidad con concordancia de género
         if region_sel == "Columna":
-            sector_val = st.selectbox("**2. Sector Anatómico**", ["Cervical", "Dorsal", "Lumbar", "Sacrococcigea", "Coxis"], index=None)
-            hoja_buscada = sector_val
+            opc_col = ["Cervical", "Columna Dorsal", "Lumbar", "Sacrococcigea", "Coxis"]
+            sector_val = st.selectbox("**2. Sector Anatómico**", opc_col, index=None, placeholder="Elegir opción")
+            # Mapeo interno: "Columna Dorsal" visual -> "Dorsal" en Excel
+            hoja_buscada = "Dorsal" if sector_val == "Columna Dorsal" else sector_val
         else:
-            lat = st.selectbox("**2. Lateralidad**", ["Derecho", "Izquierdo"], index=None)
-            hoja_buscada = f"{region_sel} {lat}"
             sectores_m = ["Hombro", "Brazo", "Codo", "Antebrazo", "Muñeca", "Mano", "Dedos"] if "Superior" in region_sel else ["Cadera", "Muslo", "Rodilla", "Pierna", "Tobillo", "Pie", "Dedos"]
-            sector_val = st.selectbox("**3. Sector Anatómico**", sectores_m, index=None)
+            sector_val = st.selectbox("**2. Sector Anatómico**", sectores_m, index=None, placeholder="Elegir opción")
+            
+            if sector_val:
+                # Lógica de género para lateralidad
+                femininos = ["Muñeca", "Mano", "Cadera", "Rodilla", "Pierna"]
+                opc_lat = ["Derecha", "Izquierda"] if sector_val in femininos else ["Derecho", "Izquierdo"]
+                
+                lat_sel = st.selectbox("**3. Lateralidad**", opc_lat, index=None, placeholder="Elegir opción")
+                
+                # Mapeo interno: "Derecha/Izquierda" visual -> "Derecho/Izquierdo" en Excel
+                lat_hoja = "Derecho" if lat_sel in ["Derecho", "Derecha"] else "Izquierdo" if lat_sel in ["Izquierdo", "Izquierda"] else None
+                hoja_buscada = f"{region_sel} {lat_hoja}" if lat_hoja else None
 
+        # Proceso de búsqueda y carga
         nombre_real_hoja = next((s for s in xls.sheet_names if hoja_buscada and hoja_buscada.lower() == s.lower().strip()), None)
 
         if nombre_real_hoja and sector_val:
             df = pd.read_excel(xls, sheet_name=nombre_real_hoja).fillna("")
             df.columns = [str(c).strip() for c in df.columns]
             
-            # Identificación de columnas por nombre
             col_cat = next((c for c in df.columns if "categor" in c.lower() and "sub" not in c.lower()), "Categoría")
             col_sub = next((c for c in df.columns if "subcategor" in c.lower()), None)
             col_sec = next((c for c in df.columns if "sector" in c.lower()), "Sector")
             col_des = next((c for c in df.columns if "descrip" in c.lower()), "Descripción de lesión")
             col_inc = next((c for c in df.columns if "incap" in c.lower() or "%" in c.lower()), "% de Incapacidad Laboral")
 
-            df_f = df[df[col_sec].astype(str).str.contains(str(sector_val), case=False, na=False)]
+            df_f = df[df[col_sec].astype(str).str.contains(str(sector_val.replace("Columna ", "")), case=False, na=False)]
 
             if not df_f.empty:
                 lista_cats = sorted(df_f[col_cat].unique().tolist())
-                cat_sel = st.selectbox(f"**4. Categoría en {sector_val}**", ["Ver todas"] + lista_cats)
+                cat_sel = st.selectbox(f"**Categoría en {sector_val}**", ["Ver todas"] + lista_cats, placeholder="Elegir opción")
                 
                 sub_sel = ""
                 if cat_sel != "Ver todas":
@@ -76,7 +93,7 @@ with st.sidebar:
                     if col_sub:
                         lista_subs = sorted([str(x) for x in df_f[col_sub].unique() if str(x).strip() != ""])
                         if lista_subs:
-                            sub_sel = st.selectbox("**5. Subcategoría**", ["Ver todas"] + lista_subs)
+                            sub_sel = st.selectbox("**Subcategoría**", ["Ver todas"] + lista_subs, placeholder="Elegir opción")
                             if sub_sel != "Ver todas":
                                 df_f = df_f[df_f[col_sub] == sub_sel]
                             else:
@@ -84,20 +101,20 @@ with st.sidebar:
 
                 opciones = sorted(df_f[col_des].unique().tolist())
                 if opciones:
-                    item = st.selectbox(f"**6. Descripción de la lesión ({len(opciones)})**", opciones, index=None)
+                    item = st.selectbox(f"**Descripción de la lesión ({len(opciones)})**", opciones, index=None, placeholder="Elegir opción")
                     if item:
                         valor = df_f[df_f[col_des] == item][col_inc].iloc[0]
                         st.success(f"**Valor baremo: {valor}%**")
                         
                         if st.button("**Agregar lesion**"):
-                            # CONCATENACIÓN INTELIGENTE: Creamos un nombre comprensible
+                            # Concatenación para nombre comprensible
                             nombre_completo = f"{cat_sel}"
                             if sub_sel:
                                 nombre_completo += f" - {sub_sel}"
                             nombre_completo += f" - {item}"
                             
                             st.session_state.pericia.append({
-                                "reg": f"{sector_val} {lat if region_sel != 'Columna' else ''}", 
+                                "reg": f"{sector_val} {lat_sel if region_sel != 'Columna' else ''}", 
                                 "desc": nombre_completo, 
                                 "val": float(valor)
                             })
@@ -105,7 +122,7 @@ with st.sidebar:
 
 # --- Panel de Resultados ---
 if st.session_state.pericia:
-    st.subheader("**Detalle de secuelas**") # Nombre cambiado según solicitud
+    st.subheader("**Detalle de secuelas**")
     grupos_topes = {}
     informe_texto = "INFORME DE CALIFICACIÓN DE INCAPACIDAD - SRT\n"
     informe_texto += "="*40 + "\n\nDETALLE DE SECUELAS:\n"
@@ -143,7 +160,7 @@ if st.session_state.pericia:
         st.markdown("### **Factores de ponderación**")
         edad = st.number_input("**Edad**", 14, 99, 25)
         f_e = 0.05 if edad <= 20 else 0.04 if edad <= 30 else 0.03 if edad <= 40 else 0.02
-        f_d = st.selectbox("**Dificultad**", [0.05, 0.10, 0.20], format_func=lambda x: f"{int(x*100)}%")
+        f_d = st.selectbox("**Dificultad**", [0.05, 0.10, 0.20], format_func=lambda x: f"{int(x*100)}%", placeholder="Elegir opción")
         
         fisico = balthazard(v_finales)
         factores = fisico * (f_e + f_d)
@@ -155,14 +172,15 @@ if st.session_state.pericia:
         st.metric("**Factores aplicados**", f"{round(factores, 2)}%")
         st.success(f"## **ILP final: {round(total_f, 2)}%**")
         
+        # Informe para exportar
         informe_texto += f"\nRESUMEN DE CÁLCULO:\n"
         informe_texto += f"- Daño físico residual (Balthazard): {fisico}%\n"
         informe_texto += f"- Factores de ponderación aplicados: {round(factores, 2)}%\n"
         informe_texto += f"- Incapacidad Laboral Permanente (ILP): {round(total_f, 2)}%\n\n"
         informe_texto += "MÉTODO DE CÁLCULO:\n"
-        informe_texto += "Se utiliza el método de la capacidad restante (fórmula de Balthazard) para la combinación de incapacidades múltiples. "
-        informe_texto += "Los factores de ponderación se calculan sobre el daño físico residual acumulado tras aplicar los topes por lateralidad. "
-        informe_texto += "En cumplimiento con la normativa, las incapacidades parciales tienen un tope máximo de 65.99%."
+        informe_texto += "Se utiliza el método de la capacidad restante (fórmula de Balthazard) para la combinación de incapacidades múltiples, donde cada nueva lesión se aplica sobre el remanente de la capacidad anterior. "
+        informe_texto += "Los factores de ponderación se calculan linealmente sobre el daño físico residual acumulado tras aplicar los topes por lateralidad. "
+        informe_texto += "En cumplimiento con la normativa, las incapacidades parciales tienen un tope máximo de 65.99% para no alcanzar el umbral de incapacidad total de forma indirecta."
 
         st.download_button(
             label="💾 **Exportar cálculo completo**",
