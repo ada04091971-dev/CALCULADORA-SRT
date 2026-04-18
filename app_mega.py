@@ -1,9 +1,3 @@
-Ese error de sintaxis ocurre porque, al copiar el código, una de las líneas de texto se cortó por la mitad, dejando las comillas abiertas. Es un error común de "copy-paste" cuando las líneas son muy largas.
-
-Aquí tenés el código de la aplicación app_mega.py corregido (sin errores de sintaxis) y, más abajo, el script de testeo masivo que me pediste para poner a prueba todas las reglas de topes, lateralidad y columna.
-
-1. Aplicación corregida: app_mega.py
-Python
 import streamlit as st
 import pandas as pd
 import os
