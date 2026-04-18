@@ -8,7 +8,6 @@ st.set_page_config(page_title="Calculadora laboral SRT", layout="wide", page_ico
 def format_text(text):
     if not text: return ""
     text = str(text).strip()
-    # Mantiene el texto tal cual para respetar la precisión técnica del Excel
     return text
 
 @st.cache_resource
@@ -27,7 +26,7 @@ def balthazard(lista):
         total = total + (lista[i] * (100 - total) / 100)
     return round(total, 2)
 
-# Inicialización de la sesión para guardar hallazgos
+# Inicialización de la sesión
 if 'pericia' not in st.session_state:
     st.session_state.pericia = []
 
@@ -58,10 +57,10 @@ with st.sidebar:
             df = pd.read_excel(xls, sheet_name=nombre_real_hoja).fillna("")
             df.columns = [str(c).strip() for c in df.columns]
             
-            # Identificación de columnas
-            col_sec = next((c for c in df.columns if "sector" in c.lower()), "Sector")
+            # Identificación de columnas por nombre
             col_cat = next((c for c in df.columns if "categor" in c.lower() and "sub" not in c.lower()), "Categoría")
             col_sub = next((c for c in df.columns if "subcategor" in c.lower()), None)
+            col_sec = next((c for c in df.columns if "sector" in c.lower()), "Sector")
             col_des = next((c for c in df.columns if "descrip" in c.lower()), "Descripción de lesión")
             col_inc = next((c for c in df.columns if "incap" in c.lower() or "%" in c.lower()), "% de Incapacidad Laboral")
 
@@ -71,6 +70,7 @@ with st.sidebar:
                 lista_cats = sorted(df_f[col_cat].unique().tolist())
                 cat_sel = st.selectbox(f"**4. Categoría en {sector_val}**", ["Ver todas"] + lista_cats)
                 
+                sub_sel = ""
                 if cat_sel != "Ver todas":
                     df_f = df_f[df_f[col_cat] == cat_sel]
                     if col_sub:
@@ -79,6 +79,8 @@ with st.sidebar:
                             sub_sel = st.selectbox("**5. Subcategoría**", ["Ver todas"] + lista_subs)
                             if sub_sel != "Ver todas":
                                 df_f = df_f[df_f[col_sub] == sub_sel]
+                            else:
+                                sub_sel = ""
 
                 opciones = sorted(df_f[col_des].unique().tolist())
                 if opciones:
@@ -88,19 +90,25 @@ with st.sidebar:
                         st.success(f"**Valor baremo: {valor}%**")
                         
                         if st.button("**Agregar lesion**"):
+                            # CONCATENACIÓN INTELIGENTE: Creamos un nombre comprensible
+                            nombre_completo = f"{cat_sel}"
+                            if sub_sel:
+                                nombre_completo += f" - {sub_sel}"
+                            nombre_completo += f" - {item}"
+                            
                             st.session_state.pericia.append({
                                 "reg": f"{sector_val} {lat if region_sel != 'Columna' else ''}", 
-                                "desc": item, 
+                                "desc": nombre_completo, 
                                 "val": float(valor)
                             })
                             st.rerun()
 
 # --- Panel de Resultados ---
 if st.session_state.pericia:
-    st.subheader("**Detalle del dictamen médico**")
+    st.subheader("**Detalle de secuelas**") # Nombre cambiado según solicitud
     grupos_topes = {}
     informe_texto = "INFORME DE CALIFICACIÓN DE INCAPACIDAD - SRT\n"
-    informe_texto += "="*40 + "\n\nDETALLE DE LESIONES:\n"
+    informe_texto += "="*40 + "\n\nDETALLE DE SECUELAS:\n"
 
     for i, p in enumerate(st.session_state.pericia):
         c1, c2, c3 = st.columns([3, 5, 1])
@@ -147,20 +155,19 @@ if st.session_state.pericia:
         st.metric("**Factores aplicados**", f"{round(factores, 2)}%")
         st.success(f"## **ILP final: {round(total_f, 2)}%**")
         
-        # Generación del contenido para exportar
         informe_texto += f"\nRESUMEN DE CÁLCULO:\n"
         informe_texto += f"- Daño físico residual (Balthazard): {fisico}%\n"
         informe_texto += f"- Factores de ponderación aplicados: {round(factores, 2)}%\n"
         informe_texto += f"- Incapacidad Laboral Permanente (ILP): {round(total_f, 2)}%\n\n"
         informe_texto += "MÉTODO DE CÁLCULO:\n"
         informe_texto += "Se utiliza el método de la capacidad restante (fórmula de Balthazard) para la combinación de incapacidades múltiples. "
-        informe_texto += "Los factores de ponderación se calculan sobre el daño físico residual. "
+        informe_texto += "Los factores de ponderación se calculan sobre el daño físico residual acumulado tras aplicar los topes por lateralidad. "
         informe_texto += "En cumplimiento con la normativa, las incapacidades parciales tienen un tope máximo de 65.99%."
 
         st.download_button(
             label="💾 **Exportar cálculo completo**",
             data=informe_texto,
-            file_name="pericia_medica_srt.txt",
+            file_name="detalle_secuelas_srt.txt",
             mime="text/plain"
         )
         
