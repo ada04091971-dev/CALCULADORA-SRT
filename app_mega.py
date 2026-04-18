@@ -173,4 +173,15 @@ if st.session_state.pericia:
         informe_texto += f"- Incapacidad Laboral Permanente (ILP): {round(total_f, 2)}%\n\n"
         informe_texto += "MÉTODO DE CÁLCULO:\n"
         informe_texto += "Se utiliza el método de la capacidad restante (fórmula de Balthazard) para la combinación de incapacidades múltiples. "
-        informe_texto += "Los factores de ponder
+        informe_texto += "Los factores de ponderación se calculan linealmente sobre el daño físico residual acumulado tras aplicar los topes por lateralidad. "
+        informe_texto += "En cumplimiento con la normativa del Decreto 549/25, las incapacidades parciales tienen un tope máximo de 65.99% y el límite absoluto de incapacidad es 100%."
+
+        st.download_button(
+            label="💾 **Exportar cálculo completo**",
+            data=informe_texto,
+            file_name="detalle_secuelas_srt.txt",
+            mime="text/plain"
+        )
+        
+        if st.button("🚨 Reiniciar cálculo"):
+            st.session_state.pericia = []; st.rerun()
