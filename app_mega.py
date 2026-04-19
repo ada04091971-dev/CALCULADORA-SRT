@@ -14,7 +14,7 @@ def abrir_excel():
     return pd.ExcelFile(archivo)
 
 def balthazard(lista):
-    """Método de la capacidad restante para combinar regiones distintas."""
+    """Método de la capacidad restante."""
     lista = sorted([x for x in lista if x > 0], reverse=True)
     if not lista: return 0.0
     total = lista[0]
@@ -54,7 +54,6 @@ with st.sidebar:
             
             col_sec = next((c for c in df.columns if "sector" in c.lower()), "Sector")
             col_cat = next((c for c in df.columns if "categor" in c.lower() and "sub" not in c.lower()), "Categoría")
-            col_sub = next((c for c in df.columns if "subcategor" in c.lower()), None)
             col_des = next((c for c in df.columns if "descrip" in c.lower()), "Descripción de lesión")
             col_inc = next((c for c in df.columns if "incap" in c.lower() or "%" in c.lower()), "% de Incapacidad Laboral")
 
@@ -62,23 +61,15 @@ with st.sidebar:
 
             if not df_f.empty:
                 cat_sel = st.selectbox(f"**Categoría en {sector_val}**", ["Ver todas"] + sorted(df_f[col_cat].unique().tolist()), placeholder="Elegir opción")
-                
-                sub_sel = ""
                 if cat_sel != "Ver todas":
                     df_f = df_f[df_f[col_cat] == cat_sel]
-                    if col_sub:
-                        lista_subs = sorted([str(x) for x in df_f[col_sub].unique() if str(x).strip() != ""])
-                        if lista_subs:
-                            sub_sel = st.selectbox("**Subcategoría**", ["Ver todas"] + lista_subs, placeholder="Elegir opción")
-                            if sub_sel != "Ver todas": df_f = df_f[df_f[col_sub] == sub_sel]
-                            else: sub_sel = ""
 
                 opciones = sorted(df_f[col_des].unique().tolist())
                 if opciones:
                     item = st.selectbox(f"**Descripción de la lesión ({len(opciones)})**", opciones, index=None, placeholder="Elegir opción")
                     if item:
                         valor = float(df_f[df_f[col_des] == item][col_inc].iloc[0])
-                        st.info(f"**Valor baremo: {valor}%**")
+                        st.info(f"**Valor baremo: ** **{valor}%**")
                         if st.button("**Agregar lesion**"):
                             st.session_state.pericia.append({
                                 "reg": f"Columna {sector_val}" if region_sel == "Columna" else f"{sector_val} {lat_sel}",
@@ -87,11 +78,16 @@ with st.sidebar:
                             })
                             st.rerun()
 
-# --- 2. Lógica de Cálculo con Suma Aritmética en Columna ---
+# --- 2. Lógica de Detección de Duplicados y Cálculos ---
 if st.session_state.pericia:
     st.subheader("**Detalle de secuelas**")
     
-    # Agrupadores específicos por reglas del Decreto 549/25
+    # Contar ocurrencias para detectar duplicados (misma descripción en mismo sector/lado)
+    conteos = {}
+    for p in st.session_state.pericia:
+        clave = (p['miembro'], p['lado'], p['sector'], p['desc'])
+        conteos[clave] = conteos.get(clave, 0) + 1
+
     cervical_arit = 0.0
     dorsolumbar_arit = 0.0
     sacro_arit = 0.0
@@ -99,12 +95,26 @@ if st.session_state.pericia:
 
     for i, p in enumerate(st.session_state.pericia):
         c1, c2, c3 = st.columns([3, 5, 1])
-        c1.write(f"**{p['reg']}**")
-        c2.write(f"{p['desc']} ({p['val']}%)")
-        if c3.button("🗑️", key=f"del_{i}"): st.session_state.pericia.pop(i); st.rerun()
-
-        v, s, m, l = p['val'], p['sector'], p['miembro'], p['lado']
         
+        # Identificar si es duplicada
+        es_duplicada = conteos[(p['miembro'], p['lado'], p['sector'], p['desc'])] > 1
+        
+        # Formato visual: Rojo si es duplicada, Negrita para el valor
+        texto_reg = f"**{p['reg']}**"
+        texto_desc = f"{p['desc']} (**{p['val']}%**)"
+        
+        if es_duplicada:
+            c1.markdown(f":red[{texto_reg}]")
+            c2.markdown(f":red[{texto_desc}]")
+        else:
+            c1.markdown(texto_reg)
+            c2.markdown(texto_desc)
+            
+        if c3.button("🗑️", key=f"del_{i}"): 
+            st.session_state.pericia.pop(i); st.rerun()
+
+        # Acumulación de valores para el cálculo
+        v, s, m, l = p['val'], p['sector'], p['miembro'], p['lado']
         if m == "Columna":
             if s == "Cervical": cervical_arit += v
             elif s in ["Dorsal", "Lumbar"]: dorsolumbar_arit += v
@@ -114,23 +124,22 @@ if st.session_state.pericia:
             if s not in miembros_data[llave]: miembros_data[llave][s] = 0.0
             miembros_data[llave][s] += v
 
-    # --- Procesamiento de Columna (Estrictamente Aritmético) ---
+    # --- Cálculos Finales ---
     cervical_final = min(cervical_arit, 40.0)
     dorsolumbar_final = min(dorsolumbar_arit, 60.0)
-    # Suma aritmética de los sectores de la columna según esquema validado
     total_columna = min(cervical_final + dorsolumbar_final + sacro_arit, 100.0)
 
-    # --- Procesamiento de Miembros (Escaleras de Topes) ---
-    v_regionales_para_balthazard = []
-    if total_columna > 0: v_regionales_para_balthazard.append(total_columna)
-
+    v_regionales = []
+    if total_columna > 0: v_regionales.append(total_columna)
+    
+    # (Lógica de Escaleras de Topes MMSS y MMII se mantiene igual)
     for lado in ["Superior Derecho", "Superior Izquierdo"]:
         d = miembros_data[lado]
         if d:
             s1 = min(d.get("Dedos", 0) + d.get("Mano", 0) + d.get("Muñeca", 0), 50.0)
             s2 = min(s1 + d.get("Antebrazo", 0), 55.0)
             s3 = min(s2 + d.get("Codo", 0) + d.get("Brazo", 0), 60.0)
-            v_regionales_para_balthazard.append(min(s3 + d.get("Hombro", 0), 66.0))
+            v_regionales.append(min(s3 + d.get("Hombro", 0), 66.0))
 
     for lado in ["Inferior Derecho", "Inferior Izquierdo"]:
         d = miembros_data[lado]
@@ -138,9 +147,8 @@ if st.session_state.pericia:
             s1 = min(d.get("Dedos", 0) + d.get("Pie", 0) + d.get("Tobillo", 0), 35.0)
             s2 = min(s1 + d.get("Pierna", 0), 40.0)
             s3 = min(s2 + d.get("Rodilla", 0), 55.0)
-            v_regionales_para_balthazard.append(min(s3 + d.get("Muslo", 0) + d.get("Cadera", 0), 70.0))
+            v_regionales.append(min(s3 + d.get("Muslo", 0) + d.get("Cadera", 0), 70.0))
 
-    # --- 3. Resultados Finales ---
     st.markdown("---")
     col_l, col_r = st.columns(2)
     with col_l:
@@ -149,13 +157,12 @@ if st.session_state.pericia:
         f_e = 0.05 if edad <= 20 else 0.04 if edad <= 30 else 0.03 if edad <= 40 else 0.02
         f_d = st.selectbox("**Dificultad**", [0.05, 0.10, 0.20], format_func=lambda x: f"{int(x*100)}%", placeholder="Elegir opción")
         
-        fisico = balthazard(v_regionales_para_balthazard)
+        fisico = balthazard(v_regionales)
         factores = fisico * (f_e + f_d)
-        total_p = fisico + factores
-        total_f = min(total_p, 65.99) if fisico < 66.0 else min(total_p, 100.0)
+        total_f = min(fisico + factores, 65.99) if fisico < 66.0 else min(fisico + factores, 100.0)
 
     with col_r:
         st.metric("**Daño físico (Balthazard)**", f"{fisico}%")
         st.metric("**Factores aplicados**", f"{round(factores, 2)}%")
-        st.success(f"## **ILP final: {round(total_f, 2)}%**")
+        st.success(f"## **ILP final: ** **{round(total_f, 2)}%**")
         if st.button("🚨 Reiniciar"): st.session_state.pericia = []; st.rerun()
