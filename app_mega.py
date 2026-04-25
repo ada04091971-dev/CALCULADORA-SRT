@@ -34,7 +34,6 @@ xls = abrir_excel()
 TABLA_M = {"M0": 1.0, "M1": 0.8, "M2": 0.8, "M3": 0.5, "M4": 0.2, "M5": 0.0}
 TABLA_S = {"S0": 1.0, "S1": 0.8, "S2": 0.8, "S3": 0.5, "S4": 0.2, "S5": 0.0}
 
-# miembros superiores (pesos y máximos corregidos por nivel)
 NERVIOS_SUPERIOR = {
     "nervio mediano proximal (brazo/codo)": {"p_m": 0.7, "p_s": 0.3, "max": 0.40},
     "nervio mediano distal (muñeca)": {"p_m": 0.4, "p_s": 0.6, "max": 0.25},
@@ -48,7 +47,6 @@ NERVIOS_SUPERIOR = {
     "nervio plexo braquial (total)": {"p_m": 0.8, "p_s": 0.2, "max": 0.60}
 }
 
-# miembros inferiores
 NERVIOS_INFERIOR = {
     "nervio ciático mayor": {"p_m": 0.5, "p_s": 0.5, "max": 0.50},
     "nervio femoral": {"p_m": 0.95, "p_s": 0.05, "max": 0.30},
@@ -59,7 +57,6 @@ NERVIOS_INFERIOR = {
     "nervio safeno": {"p_m": 0.0, "p_s": 1.0, "max": 0.05}
 }
 
-# raíces espinales (carga simplificada decreto)
 RAICES_ESPINALES = {
     "cervical": {"raíz c2": 3, "raíz c3": 3, "raíz c4": 3, "raíz c5": 5, "raíz c6": 9, "raíz c7": 9, "raíz c8": 8},
     "dorsolumbar": {"raíz d1-d12": 2, "raíz l1-l5": 3, "raíz s1-s2": 3, "raíz s3-s5": 5}
@@ -146,7 +143,6 @@ if st.session_state.pericia:
             c1.markdown(txt_r); c2.markdown(txt_d)
         if c3.button("🗑️", key=f"d_{i}"): st.session_state.pericia.pop(i); st.rerun()
 
-        # acumulación para lógica de topes
         v, s, m, l = p['val'], p['sector'], p['miembro'].lower(), p['lado'].lower() if p['lado'] else ""
         if "columna" in m:
             if "cervical" in s: cervical_arit += v
@@ -157,11 +153,9 @@ if st.session_state.pericia:
             miembros_data[llave][s] = miembros_data[llave].get(s, 0) + v
 
     v_regionales = []
-    # columna: suma aritmética de sectores con tope individual
     total_col = min(min(cervical_arit, 40.0) + min(dorsolumbar_arit, 60.0) + sacro_arit, 100.0)
     if total_col > 0: v_regionales.append(total_col)
 
-    # miembros: suma aritmética con escaleras de topes y tope regional
     for l in ["superior derecho", "superior izquierdo"]:
         d = miembros_data[l]
         if d:
@@ -182,23 +176,24 @@ if st.session_state.pericia:
     col_l, col_r = st.columns(2)
     with col_l:
         st.markdown("### **factores de ponderación**")
-        edad = st.number_input("**edad**", 14, 99, 54) # 54 años según tu perfil
+        edad = st.number_input("**edad**", 14, 99, 54) 
         
-        # rangos exactos decreto 549/25 pág 6
         if edad < 21: f_e = 0.05
         elif 21 <= edad <= 35: f_e = 0.04
         elif 36 <= edad <= 45: f_e = 0.03
-        else: f_e = 0.02 # 46 años o más
+        else: f_e = 0.02 
             
+        # 1. Ajuste: se agregó la opción 0.0 (0%) en dificultad
         f_d = st.selectbox("**dificultad**", [0.0, 0.05, 0.10, 0.20], format_func=lambda x: f"{int(x*100)}%")
+        
         fisico = balthazard(v_regionales)
         factores = fisico * (f_e + f_d)
         total_pre = fisico + factores
-        # regla de oro: tope de incapacidad parcial o total
         total_f = min(total_pre, 65.99) if fisico < 66.0 else min(total_pre, 100.0)
 
     with col_r:
         st.metric("**daño físico (balthazard)**", f"{fisico}%")
         st.metric("**factores aplicados**", f"{round(factores, 2)}%")
-        st.success(f"## **ilp final: ** **{round(total_f, 2)}%**")
+        # 2. Ajuste: Etiqueta en mayúscula imprenta ILP FINAL
+        st.success(f"## **ILP FINAL: ** **{round(total_f, 2)}%**")
         if st.button("🚨 reiniciar"): st.session_state.pericia = []; st.rerun()
