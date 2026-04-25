@@ -14,6 +14,7 @@ def abrir_excel():
     return pd.ExcelFile(archivo)
 
 def balthazard(lista):
+    """fórmula de la capacidad restante."""
     lista = sorted([x for x in lista if x > 0], reverse=True)
     if not lista: return 0.0
     total = lista[0]
@@ -33,34 +34,32 @@ xls = abrir_excel()
 TABLA_M = {"M0": 1.0, "M1": 0.8, "M2": 0.8, "M3": 0.5, "M4": 0.2, "M5": 0.0}
 TABLA_S = {"S0": 1.0, "S1": 0.8, "S2": 0.8, "S3": 0.5, "S4": 0.2, "S5": 0.0}
 
-# miembros superiores (msd/msi)
+# miembros superiores (pesos y máximos corregidos por nivel)
 NERVIOS_SUPERIOR = {
-    "nervio mediano proximal": {"p_m": 0.7, "p_s": 0.3, "max": 0.40},
-    "nervio mediano distal": {"p_m": 0.4, "p_s": 0.6, "max": 0.25},
-    "nervio cubital proximal": {"p_m": 0.7, "p_s": 0.3, "max": 0.35},
-    "nervio cubital distal": {"p_m": 0.7, "p_s": 0.3, "max": 0.25},
+    "nervio mediano proximal (brazo/codo)": {"p_m": 0.7, "p_s": 0.3, "max": 0.40},
+    "nervio mediano distal (muñeca)": {"p_m": 0.4, "p_s": 0.6, "max": 0.25},
+    "nervio cubital proximal (codo)": {"p_m": 0.7, "p_s": 0.3, "max": 0.35},
+    "nervio cubital distal (muñeca)": {"p_m": 0.7, "p_s": 0.3, "max": 0.25},
     "nervio radial": {"p_m": 0.9, "p_s": 0.1, "max": 0.30},
     "nervio músculo cutáneo": {"p_m": 0.9, "p_s": 0.1, "max": 0.20},
     "nervio axilar": {"p_m": 0.98, "p_s": 0.02, "max": 0.20},
     "nervio supraescapular": {"p_m": 1.0, "p_s": 0.0, "max": 0.05},
-    "nervio torácico largo": {"p_m": 1.0, "p_s": 0.0, "max": 0.05},
     "nervio interoseo anterior": {"p_m": 1.0, "p_s": 0.0, "max": 0.15},
-    "nervio interoseo posterior": {"p_m": 1.0, "p_s": 0.0, "max": 0.10}
+    "nervio plexo braquial (total)": {"p_m": 0.8, "p_s": 0.2, "max": 0.60}
 }
 
-# miembros inferiores (mid/mii)
+# miembros inferiores
 NERVIOS_INFERIOR = {
-    "nervio ciático": {"p_m": 0.5, "p_s": 0.5, "max": 0.50},
+    "nervio ciático mayor": {"p_m": 0.5, "p_s": 0.5, "max": 0.50},
     "nervio femoral": {"p_m": 0.95, "p_s": 0.05, "max": 0.30},
-    "nervio peroneo común": {"p_m": 0.7, "p_s": 0.3, "max": 0.25},
+    "nervio peroneo común (cpe)": {"p_m": 0.7, "p_s": 0.3, "max": 0.25},
     "nervio tibial posterior (prox)": {"p_m": 0.6, "p_s": 0.4, "max": 0.20},
     "nervio tibial anterior (prox)": {"p_m": 0.95, "p_s": 0.05, "max": 0.15},
-    "nervio plantar (ext/int)": {"p_m": 0.3, "p_s": 0.7, "max": 0.10},
     "nervio sural": {"p_m": 0.0, "p_s": 1.0, "max": 0.05},
     "nervio safeno": {"p_m": 0.0, "p_s": 1.0, "max": 0.05}
 }
 
-# raíces espinales (carga simplificada)
+# raíces espinales (carga simplificada decreto)
 RAICES_ESPINALES = {
     "cervical": {"raíz c2": 3, "raíz c3": 3, "raíz c4": 3, "raíz c5": 5, "raíz c6": 9, "raíz c7": 9, "raíz c8": 8},
     "dorsolumbar": {"raíz d1-d12": 2, "raíz l1-l5": 3, "raíz s1-s2": 3, "raíz s3-s5": 5}
@@ -73,7 +72,6 @@ with st.sidebar:
     
     if region_sel:
         if tipo_hallazgo == "osteoarticular":
-            # [bloque osteoarticular original]
             if region_sel == "columna":
                 sectores = ["cervical", "dorsal", "lumbar", "sacrococcigea", "coxis"]
                 sector_val = st.selectbox("**2. sector**", sectores, index=None)
@@ -95,11 +93,11 @@ with st.sidebar:
                     if item:
                         valor = float(df_f[df_f[df_f.columns[2]] == item][df_f.columns[3]].iloc[0])
                         st.info(f"**valor baremo: ** **{valor}%**")
-                        if st.button("agregar"):
+                        if st.button("agregar lesión"):
                             st.session_state.pericia.append({"reg": f"{sector_val} {lat_sel}" if lat_sel else sector_val, "val": valor, "miembro": region_sel, "sector": sector_val, "lado": lat_sel, "desc": item})
                             st.rerun()
 
-        else: # neurológica
+        else: # módulo neurológico
             if region_sel == "columna":
                 cat_root = st.selectbox("**2. sector de raíz**", ["cervical", "dorsolumbar"], index=None)
                 if cat_root:
@@ -122,7 +120,7 @@ with st.sidebar:
                         n = dicc[nervio_sel]
                         valor_n = round(((TABLA_M[gm] * n['p_m']) + (TABLA_S[gs] * n['p_s'])) * n['max'] * 100, 2)
                         st.warning(f"**incapacidad calculada: ** **{valor_n}%**")
-                        sector_dest = st.selectbox("**4. sector (para tope)**", ["hombro", "brazo", "codo", "antebrazo", "muñeca", "mano"] if "superior" in region_sel else ["cadera", "muslo", "rodilla", "pierna", "tobillo", "pie"])
+                        sector_dest = st.selectbox("**4. asignar a sector (para tope)**", ["hombro", "brazo", "codo", "antebrazo", "muñeca", "mano"] if "superior" in region_sel else ["cadera", "muslo", "rodilla", "pierna", "tobillo", "pie"])
                         if st.button("agregar nervio"):
                             st.session_state.pericia.append({"reg": f"nervio {lat_sel}", "val": valor_n, "miembro": region_sel, "sector": sector_dest, "lado": lat_sel, "desc": f"{nervio_sel} ({gm}/{gs})"})
                             st.rerun()
@@ -148,6 +146,7 @@ if st.session_state.pericia:
             c1.markdown(txt_r); c2.markdown(txt_d)
         if c3.button("🗑️", key=f"d_{i}"): st.session_state.pericia.pop(i); st.rerun()
 
+        # acumulación para lógica de topes
         v, s, m, l = p['val'], p['sector'], p['miembro'].lower(), p['lado'].lower() if p['lado'] else ""
         if "columna" in m:
             if "cervical" in s: cervical_arit += v
@@ -158,11 +157,11 @@ if st.session_state.pericia:
             miembros_data[llave][s] = miembros_data[llave].get(s, 0) + v
 
     v_regionales = []
-    # columna aritmética
+    # columna: suma aritmética de sectores con tope individual
     total_col = min(min(cervical_arit, 40.0) + min(dorsolumbar_arit, 60.0) + sacro_arit, 100.0)
     if total_col > 0: v_regionales.append(total_col)
 
-    # escaleras miembros
+    # miembros: suma aritmética con escaleras de topes y tope regional
     for l in ["superior derecho", "superior izquierdo"]:
         d = miembros_data[l]
         if d:
@@ -183,15 +182,20 @@ if st.session_state.pericia:
     col_l, col_r = st.columns(2)
     with col_l:
         st.markdown("### **factores de ponderación**")
-        edad = st.number_input("**edad**", 14, 99, 25)
+        edad = st.number_input("**edad**", 14, 99, 54) # 54 años según tu perfil
+        
+        # rangos exactos decreto 549/25 pág 6
         if edad < 21: f_e = 0.05
         elif 21 <= edad <= 35: f_e = 0.04
         elif 36 <= edad <= 45: f_e = 0.03
-        else: f_e = 0.02
-        f_d = st.selectbox("**dificultad**", [0.05, 0.10, 0.20], format_func=lambda x: f"{int(x*100)}%")
+        else: f_e = 0.02 # 46 años o más
+            
+        f_d = st.selectbox("**dificultad**", [0.0, 0.05, 0.10, 0.20], format_func=lambda x: f"{int(x*100)}%")
         fisico = balthazard(v_regionales)
         factores = fisico * (f_e + f_d)
-        total_f = min(fisico + factores, 65.99) if fisico < 66.0 else min(fisico + factores, 100.0)
+        total_pre = fisico + factores
+        # regla de oro: tope de incapacidad parcial o total
+        total_f = min(total_pre, 65.99) if fisico < 66.0 else min(total_pre, 100.0)
 
     with col_r:
         st.metric("**daño físico (balthazard)**", f"{fisico}%")
