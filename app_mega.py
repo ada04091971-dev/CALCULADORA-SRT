@@ -122,7 +122,7 @@ with st.sidebar:
                             st.session_state.pericia.append({"reg": f"nervio {lat_sel}", "val": valor_n, "miembro": region_sel, "sector": sector_dest, "lado": lat_sel, "desc": f"{nervio_sel} ({gm}/{gs})"})
                             st.rerun()
 
-# --- 2. visualización y cálculos (bold y duplicados) ---
+# --- 2. visualización y cálculos ---
 if st.session_state.pericia:
     st.subheader("**detalle de secuelas**")
     conteos = {}
@@ -183,8 +183,8 @@ if st.session_state.pericia:
         elif 36 <= edad <= 45: f_e = 0.03
         else: f_e = 0.02 
             
-        # 1. Ajuste: se agregó la opción 0.0 (0%) en dificultad
-        f_d = st.selectbox("**dificultad**", [0.0, 0.05, 0.10, 0.20], format_func=lambda x: f"{int(x*100)}%")
+        # Corregido: solo opciones 5%, 10% y 20%
+        f_d = st.selectbox("**dificultad**", [0.05, 0.10, 0.20], format_func=lambda x: f"{int(x*100)}%")
         
         fisico = balthazard(v_regionales)
         factores = fisico * (f_e + f_d)
@@ -194,6 +194,6 @@ if st.session_state.pericia:
     with col_r:
         st.metric("**daño físico (balthazard)**", f"{fisico}%")
         st.metric("**factores aplicados**", f"{round(factores, 2)}%")
-        # 2. Ajuste: Etiqueta en mayúscula imprenta ILP FINAL
+        # Corregido: Etiqueta ILP FINAL en mayúsculas
         st.success(f"## **ILP FINAL: ** **{round(total_f, 2)}%**")
         if st.button("🚨 reiniciar"): st.session_state.pericia = []; st.rerun()
