@@ -30,7 +30,7 @@ st.markdown("---")
 
 xls = abrir_excel()
 
-# --- Diccionarios Neurológicos (Incrustados para seguridad) ---
+# --- Diccionarios Neurológicos (Datos integrados de calculadoraNEURO.xlsx) ---
 TABLA_M = {"M0": 1.0, "M1": 0.8, "M2": 0.8, "M3": 0.5, "M4": 0.2, "M5": 0.0}
 TABLA_S = {"S0": 1.0, "S1": 0.8, "S2": 0.8, "S3": 0.5, "S4": 0.2, "S5": 0.0}
 
@@ -40,20 +40,13 @@ NERVIOS_SUPERIOR = {
     "Nervio Cubital Proximal (Codo)": {"p_m": 0.7, "p_s": 0.3, "max": 0.35},
     "Nervio Cubital Distal (Muñeca)": {"p_m": 0.7, "p_s": 0.3, "max": 0.25},
     "Nervio Radial": {"p_m": 0.9, "p_s": 0.1, "max": 0.30},
-    "Nervio Músculo Cutáneo": {"p_m": 0.9, "p_s": 0.1, "max": 0.20},
-    "Nervio Axilar": {"p_m": 0.98, "p_s": 0.02, "max": 0.20},
-    "Nervio Supraescapular": {"p_m": 1.0, "p_s": 0.0, "max": 0.05},
-    "Nervio Interoseo Anterior": {"p_m": 1.0, "p_s": 0.0, "max": 0.15},
     "Nervio Plexo Braquial (Total)": {"p_m": 0.8, "p_s": 0.2, "max": 0.60}
 }
 
 NERVIOS_INFERIOR = {
     "Nervio Ciático Mayor": {"p_m": 0.5, "p_s": 0.5, "max": 0.50},
-    "Nervio Femoral": {"p_m": 0.95, "p_s": 0.05, "max": 0.30},
     "Nervio Peroneo Común (CPE)": {"p_m": 0.7, "p_s": 0.3, "max": 0.25},
-    "Nervio Tibial Posterior (Prox)": {"p_m": 0.6, "p_s": 0.4, "max": 0.20},
-    "Nervio Tibial Anterior (Prox)": {"p_m": 0.95, "p_s": 0.05, "max": 0.15},
-    "Nervio Sural": {"p_m": 0.0, "p_s": 1.0, "max": 0.05}
+    "Nervio Tibial Posterior (Prox)": {"p_m": 0.6, "p_s": 0.4, "max": 0.20}
 }
 
 RAICES_ESPINALES = {
@@ -68,16 +61,15 @@ with st.sidebar:
     
     if region_sel:
         if tipo_hallazgo == "Osteoarticular":
-            # --- BLOQUE RESTAURADO: Navegación por jerarquías ---
             if region_sel == "Columna":
                 sectores = ["Cervical", "Dorsal", "Lumbar", "Sacrococcigea", "Coxis"]
-                sector_val = st.selectbox("**2. Sector Anatómico**", sectores, index=None)
+                sector_val = st.selectbox("**2. Sector**", sectores, index=None)
                 hoja_buscada = sector_val
                 lat_sel = None
             else:
                 lat_sel = st.selectbox("**2. Lateralidad**", ["Derecho", "Izquierdo"], index=None)
                 sectores = ["Hombro", "Brazo", "Codo", "Antebrazo", "Muñeca", "Mano", "Dedos"] if "Superior" in region_sel else ["Cadera", "Muslo", "Rodilla", "Pierna", "Tobillo", "Pie", "Dedos"]
-                sector_val = st.selectbox("**3. Sector Anatómico**", sectores, index=None)
+                sector_val = st.selectbox("**3. Sector**", sectores, index=None)
                 hoja_buscada = f"{region_sel} {lat_sel}"
 
             if sector_val and hoja_buscada:
@@ -86,47 +78,36 @@ with st.sidebar:
                     df = pd.read_excel(xls, sheet_name=nombre_real).fillna("")
                     df.columns = [str(c).strip() for c in df.columns]
                     
-                    # Identificación de columnas originales
                     col_sec = next((c for c in df.columns if "sector" in c.lower()), df.columns[0])
                     col_cat = next((c for c in df.columns if "categor" in c.lower() and "sub" not in c.lower()), "Categoría")
                     col_sub = next((c for c in df.columns if "sub" in c.lower() and "categor" in c.lower()), "Subcategoría")
                     col_des = next((c for c in df.columns if "descrip" in c.lower()), "Descripción")
                     col_inc = next((c for c in df.columns if "incap" in c.lower() or "%" in c.lower()), "%")
 
-                    # Filtrado por sector
                     df_f = df[df[col_sec].astype(str).str.contains(str(sector_val), case=False, na=False)]
 
                     if not df_f.empty:
-                        # Paso 1: Categoría
                         lista_cat = sorted(df_f[col_cat].unique().tolist())
                         cat_sel = st.selectbox("**Categoría**", ["Elegir..."] + lista_cat)
                         
                         if cat_sel != "Elegir...":
                             df_f = df_f[df_f[col_cat] == cat_sel]
-                            
-                            # Paso 2: Subcategoría (si existe contenido)
                             lista_sub = sorted([s for s in df_f[col_sub].unique().tolist() if str(s).strip() != ""])
                             if lista_sub:
                                 sub_sel = st.selectbox("**Subcategoría**", ["Elegir..."] + lista_sub)
                                 if sub_sel != "Elegir...":
                                     df_f = df_f[df_f[col_sub] == sub_sel]
                             
-                            # Paso 3: Descripción Final
                             opciones = sorted(df_f[col_des].unique().tolist())
                             item = st.selectbox(f"**Lesión ({len(opciones)})**", opciones, index=None)
-                            
                             if item:
                                 valor = float(df_f[df_f[col_des] == item][col_inc].iloc[0])
                                 st.info(f"**Valor baremo: ** **{valor}%**")
                                 if st.button("Agregar lesión"):
-                                    st.session_state.pericia.append({
-                                        "reg": f"{sector_val} {lat_sel}" if lat_sel else sector_val,
-                                        "val": valor, "miembro": region_sel, "sector": sector_val, 
-                                        "lado": lat_sel, "desc": f"{cat_sel} - {item}"
-                                    })
+                                    st.session_state.pericia.append({"reg": f"{sector_val} {lat_sel}" if lat_sel else sector_val, "val": valor, "miembro": region_sel, "sector": sector_val, "lado": lat_sel, "desc": f"{cat_sel} - {item}"})
                                     st.rerun()
 
-        else: # Módulo Neurológico (Mantiene su lógica simplificada)
+        else: # Módulo Neurológico
             if region_sel == "Columna":
                 cat_root = st.selectbox("**2. Sector de raíz**", ["Cervical", "Dorsolumbar"], index=None)
                 if cat_root:
@@ -154,7 +135,7 @@ with st.sidebar:
                             st.session_state.pericia.append({"reg": f"Nervio {lat_sel}", "val": valor_n, "miembro": region_sel, "sector": sector_dest, "lado": lat_sel, "desc": f"{nervio_sel} ({gm}/{gs})"})
                             st.rerun()
 
-# --- 2. Visualización, Duplicados y Cálculos Finales ---
+# --- 2. Cálculos y Visualización ---
 if st.session_state.pericia:
     st.subheader("**Detalle de secuelas**")
     conteos = {}
@@ -175,7 +156,6 @@ if st.session_state.pericia:
             c1.markdown(txt_r); c2.markdown(txt_d)
         if c3.button("🗑️", key=f"d_{i}"): st.session_state.pericia.pop(i); st.rerun()
 
-        # Acumulación para topes
         v, s, m, l = p['val'], p['sector'], p['miembro'].lower(), p['lado'].lower() if p['lado'] else ""
         if "columna" in m:
             if "cervical" in s: cervical_arit += v
@@ -186,24 +166,30 @@ if st.session_state.pericia:
             miembros_data[llave][s] = miembros_data[llave].get(s, 0) + v
 
     v_regionales = []
-    total_col = min(min(cervical_arit, 40.0) + min(dorsolumbar_arit, 60.0) + sacro_arit, 100.0)
+    
+    # 🛡️ TOPES DE COLUMNA (Anquilosis)
+    cervical_f = min(cervical_arit, 40.0)
+    dorsolumbar_f = min(dorsolumbar_arit, 60.0)
+    total_col = min(cervical_f + dorsolumbar_f + sacro_arit, 100.0)
     if total_col > 0: v_regionales.append(total_col)
 
+    # 🛡️ ESCALERAS MIEMBRO SUPERIOR (Tope 66%)
     for l in ["superior derecho", "superior izquierdo"]:
         d = miembros_data[l]
         if d:
-            s1 = min(d.get("dedos", 0) + d.get("mano", 0) + d.get("muñeca", 0), 50.0)
-            s2 = min(s1 + d.get("antebrazo", 0), 55.0)
-            s3 = min(s2 + d.get("codo", 0) + d.get("brazo", 0), 60.0)
-            v_regionales.append(min(s3 + d.get("hombro", 0), 66.0))
+            s1 = min(d.get("Dedos", 0) + d.get("Mano", 0) + d.get("Muñeca", 0), 50.0) # Tope Mano
+            s2 = min(s1 + d.get("Antebrazo", 0), 55.0) # Tope Antebrazo
+            s3 = min(s2 + d.get("Codo", 0) + d.get("Brazo", 0), 60.0) # Tope Brazo
+            v_regionales.append(min(s3 + d.get("Hombro", 0), 66.0)) # Tope Amputación Interescapulotorácica
             
+    # 🛡️ ESCALERAS MIEMBRO INFERIOR (Tope 70%)
     for l in ["inferior derecho", "inferior izquierdo"]:
         d = miembros_data[l]
         if d:
-            s1 = min(d.get("dedos", 0) + d.get("pie", 0) + d.get("tobillo", 0), 35.0)
-            s2 = min(s1 + d.get("pierna", 0), 40.0)
-            s3 = min(s2 + d.get("rodilla", 0), 55.0)
-            v_regionales.append(min(s3 + d.get("muslo", 0) + d.get("cadera", 0), 70.0))
+            s1 = min(d.get("Dedos", 0) + d.get("Pie", 0) + d.get("Tobillo", 0), 35.0) # Tope Pie
+            s2 = min(s1 + d.get("Pierna", 0), 40.0) # Tope Pierna
+            s3 = min(s2 + d.get("Rodilla", 0), 55.0) # Tope Rodilla
+            v_regionales.append(min(s3 + d.get("Muslo", 0) + d.get("Cadera", 0), 70.0)) # Tope Desarticulación Coxofemoral
 
     st.markdown("---")
     col_l, col_r = st.columns(2)
