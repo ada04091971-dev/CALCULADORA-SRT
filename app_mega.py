@@ -2,19 +2,19 @@ import streamlit as st
 import pandas as pd
 import os
 
-# 1. configuración de la aplicación
-st.set_page_config(page_title="calculadora laboral srt", layout="wide", page_icon="🧮")
+# 1. Configuración de la aplicación
+st.set_page_config(page_title="Calculadora laboral SRT", layout="wide", page_icon="🧮")
 
 @st.cache_resource
 def abrir_excel():
     archivo = "calculadora_final_srt.xlsx"
     if not os.path.exists(archivo):
-        st.error(f"no se encontró el archivo '{archivo}' en la carpeta.")
+        st.error(f"No se encontró el archivo '{archivo}' en la carpeta.")
         st.stop()
     return pd.ExcelFile(archivo)
 
 def balthazard(lista):
-    """fórmula de la capacidad restante."""
+    """Método de la capacidad restante."""
     lista = sorted([x for x in lista if x > 0], reverse=True)
     if not lista: return 0.0
     total = lista[0]
@@ -25,126 +25,138 @@ def balthazard(lista):
 if 'pericia' not in st.session_state:
     st.session_state.pericia = []
 
-st.title("🧮 **calculadora laboral srt: decreto 549/25**")
+st.title("🧮 **Calculadora laboral SRT: Decreto 549/25**")
 st.markdown("---")
 
 xls = abrir_excel()
 
-# --- diccionarios neurológicos (datos integrados de calculadoraneuro.xlsx) ---
+# --- Diccionarios Neurológicos (Incrustados para seguridad) ---
 TABLA_M = {"M0": 1.0, "M1": 0.8, "M2": 0.8, "M3": 0.5, "M4": 0.2, "M5": 0.0}
 TABLA_S = {"S0": 1.0, "S1": 0.8, "S2": 0.8, "S3": 0.5, "S4": 0.2, "S5": 0.0}
 
 NERVIOS_SUPERIOR = {
-    "nervio mediano proximal (brazo/codo)": {"p_m": 0.7, "p_s": 0.3, "max": 0.40},
-    "nervio mediano distal (muñeca)": {"p_m": 0.4, "p_s": 0.6, "max": 0.25},
-    "nervio cubital proximal (codo)": {"p_m": 0.7, "p_s": 0.3, "max": 0.35},
-    "nervio cubital distal (muñeca)": {"p_m": 0.7, "p_s": 0.3, "max": 0.25},
-    "nervio radial": {"p_m": 0.9, "p_s": 0.1, "max": 0.30},
-    "nervio músculo cutáneo": {"p_m": 0.9, "p_s": 0.1, "max": 0.20},
-    "nervio axilar": {"p_m": 0.98, "p_s": 0.02, "max": 0.20},
-    "nervio supraescapular": {"p_m": 1.0, "p_s": 0.0, "max": 0.05},
-    "nervio interoseo anterior": {"p_m": 1.0, "p_s": 0.0, "max": 0.15},
-    "nervio plexo braquial (total)": {"p_m": 0.8, "p_s": 0.2, "max": 0.60}
+    "Nervio Mediano Proximal (Brazo/Codo)": {"p_m": 0.7, "p_s": 0.3, "max": 0.40},
+    "Nervio Mediano Distal (Muñeca)": {"p_m": 0.4, "p_s": 0.6, "max": 0.25},
+    "Nervio Cubital Proximal (Codo)": {"p_m": 0.7, "p_s": 0.3, "max": 0.35},
+    "Nervio Cubital Distal (Muñeca)": {"p_m": 0.7, "p_s": 0.3, "max": 0.25},
+    "Nervio Radial": {"p_m": 0.9, "p_s": 0.1, "max": 0.30},
+    "Nervio Músculo Cutáneo": {"p_m": 0.9, "p_s": 0.1, "max": 0.20},
+    "Nervio Axilar": {"p_m": 0.98, "p_s": 0.02, "max": 0.20},
+    "Nervio Supraescapular": {"p_m": 1.0, "p_s": 0.0, "max": 0.05},
+    "Nervio Interoseo Anterior": {"p_m": 1.0, "p_s": 0.0, "max": 0.15},
+    "Nervio Plexo Braquial (Total)": {"p_m": 0.8, "p_s": 0.2, "max": 0.60}
 }
 
 NERVIOS_INFERIOR = {
-    "nervio ciático mayor": {"p_m": 0.5, "p_s": 0.5, "max": 0.50},
-    "nervio femoral": {"p_m": 0.95, "p_s": 0.05, "max": 0.30},
-    "nervio peroneo común (cpe)": {"p_m": 0.7, "p_s": 0.3, "max": 0.25},
-    "nervio tibial posterior (prox)": {"p_m": 0.6, "p_s": 0.4, "max": 0.20},
-    "nervio tibial anterior (prox)": {"p_m": 0.95, "p_s": 0.05, "max": 0.15},
-    "nervio sural": {"p_m": 0.0, "p_s": 1.0, "max": 0.05}
+    "Nervio Ciático Mayor": {"p_m": 0.5, "p_s": 0.5, "max": 0.50},
+    "Nervio Femoral": {"p_m": 0.95, "p_s": 0.05, "max": 0.30},
+    "Nervio Peroneo Común (CPE)": {"p_m": 0.7, "p_s": 0.3, "max": 0.25},
+    "Nervio Tibial Posterior (Prox)": {"p_m": 0.6, "p_s": 0.4, "max": 0.20},
+    "Nervio Tibial Anterior (Prox)": {"p_m": 0.95, "p_s": 0.05, "max": 0.15},
+    "Nervio Sural": {"p_m": 0.0, "p_s": 1.0, "max": 0.05}
 }
 
 RAICES_ESPINALES = {
-    "cervical": {"raíz c2": 3, "raíz c3": 3, "raíz c4": 3, "raíz c5": 5, "raíz c6": 9, "raíz c7": 9, "raíz c8": 8},
-    "dorsolumbar": {"raíz d1-d12": 2, "raíz l1-l5": 3, "raíz s1-s2": 3, "raíz s3-s5": 5}
+    "Cervical": {"Raíz C2": 3, "Raíz C3": 3, "Raíz C4": 3, "Raíz C5": 5, "Raíz C6": 9, "Raíz C7": 9, "Raíz C8": 8},
+    "Dorsolumbar": {"Raíz D1-D12": 2, "Raíz L1-L5": 3, "Raíz S1-S2": 3, "Raíz S3-S5": 5}
 }
 
 with st.sidebar:
-    st.header("**carga de hallazgos**")
-    tipo_hallazgo = st.radio("**tipo de lesión**", ["osteoarticular", "neurológica"])
-    region_sel = st.selectbox("**1. región topográfica**", ["columna", "miembro superior", "miembro inferior"], index=None)
+    st.header("**Carga de hallazgos**")
+    tipo_hallazgo = st.radio("**Tipo de lesión**", ["Osteoarticular", "Neurológica"])
+    region_sel = st.selectbox("**1. Región Topográfica**", ["Columna", "Miembro Superior", "Miembro Inferior"], index=None)
     
     if region_sel:
-        if tipo_hallazgo == "osteoarticular":
-            # --- lógica osteoarticular con reconstrucción de denominación ---
-            if region_sel == "columna":
-                sectores = ["cervical", "dorsal", "lumbar", "sacrococcigea", "coxis"]
-                sector_val = st.selectbox("**2. sector**", sectores, index=None)
-                hoja_nombre = sector_val
+        if tipo_hallazgo == "Osteoarticular":
+            # --- BLOQUE RESTAURADO: Navegación por jerarquías ---
+            if region_sel == "Columna":
+                sectores = ["Cervical", "Dorsal", "Lumbar", "Sacrococcigea", "Coxis"]
+                sector_val = st.selectbox("**2. Sector Anatómico**", sectores, index=None)
+                hoja_buscada = sector_val
                 lat_sel = None
             else:
-                lat_sel = st.selectbox("**2. lateralidad**", ["derecho", "izquierdo"], index=None)
-                sectores = ["hombro", "brazo", "codo", "antebrazo", "muñeca", "mano", "dedos"] if "superior" in region_sel else ["cadera", "muslo", "rodilla", "pierna", "tobillo", "pie", "dedos"]
-                sector_val = st.selectbox("**3. sector**", sectores, index=None)
-                hoja_nombre = f"{region_sel} {lat_sel}"
+                lat_sel = st.selectbox("**2. Lateralidad**", ["Derecho", "Izquierdo"], index=None)
+                sectores = ["Hombro", "Brazo", "Codo", "Antebrazo", "Muñeca", "Mano", "Dedos"] if "Superior" in region_sel else ["Cadera", "Muslo", "Rodilla", "Pierna", "Tobillo", "Pie", "Dedos"]
+                sector_val = st.selectbox("**3. Sector Anatómico**", sectores, index=None)
+                hoja_buscada = f"{region_sel} {lat_sel}"
 
-            if sector_val and hoja_nombre:
-                nombre_hoja_real = next((s for s in xls.sheet_names if hoja_nombre.lower() == s.lower().strip()), None)
-                if nombre_hoja_real:
-                    df = pd.read_excel(xls, sheet_name=nombre_hoja_real).fillna("")
+            if sector_val and hoja_buscada:
+                nombre_real = next((s for s in xls.sheet_names if hoja_buscada.lower() == s.lower().strip()), None)
+                if nombre_real:
+                    df = pd.read_excel(xls, sheet_name=nombre_real).fillna("")
+                    df.columns = [str(c).strip() for c in df.columns]
                     
-                    # 1. detectar columna de incapacidad
-                    col_incap = next((c for c in df.columns if any(x in str(c).lower() for x in ["incap", "%", "valor"])), df.columns[-1])
-                    
-                    # 2. filtrar por sector (solo en miembros, en columna la hoja ya es el sector)
-                    if "miembro" in region_sel.lower():
-                        col_sec = next((c for c in df.columns if any(x in str(c).lower() for x in ["sector", "apartado"])), df.columns[0])
-                        df_f = df[df[col_sec].astype(str).str.contains(str(sector_val), case=False, na=False)]
-                        if df_f.empty: df_f = df # fallback si el filtro falla
-                    else:
-                        df_f = df
+                    # Identificación de columnas originales
+                    col_sec = next((c for c in df.columns if "sector" in c.lower()), df.columns[0])
+                    col_cat = next((c for c in df.columns if "categor" in c.lower() and "sub" not in c.lower()), "Categoría")
+                    col_sub = next((c for c in df.columns if "sub" in c.lower() and "categor" in c.lower()), "Subcategoría")
+                    col_des = next((c for c in df.columns if "descrip" in c.lower()), "Descripción")
+                    col_inc = next((c for c in df.columns if "incap" in c.lower() or "%" in c.lower()), "%")
 
-                    # 3. construir denominación completa (une todas las columnas descriptivas)
-                    desc_cols = [c for c in df.columns if c != col_incap]
-                    def unir_denominacion(row):
-                        partes = [str(row[c]).strip() for c in desc_cols if str(row[c]).strip() != "" and str(row[c]).lower() != "nan"]
-                        # evitamos repetir el sector en la descripción si ya está en la parte inicial
-                        return " - ".join(partes)
+                    # Filtrado por sector
+                    df_f = df[df[col_sec].astype(str).str.contains(str(sector_val), case=False, na=False)]
 
-                    df_f['fulldesc'] = df_f.apply(unir_denominacion, axis=1)
-                    opciones = sorted(df_f['fulldesc'].unique().tolist())
+                    if not df_f.empty:
+                        # Paso 1: Categoría
+                        lista_cat = sorted(df_f[col_cat].unique().tolist())
+                        cat_sel = st.selectbox("**Categoría**", ["Elegir..."] + lista_cat)
+                        
+                        if cat_sel != "Elegir...":
+                            df_f = df_f[df_f[col_cat] == cat_sel]
+                            
+                            # Paso 2: Subcategoría (si existe contenido)
+                            lista_sub = sorted([s for s in df_f[col_sub].unique().tolist() if str(s).strip() != ""])
+                            if lista_sub:
+                                sub_sel = st.selectbox("**Subcategoría**", ["Elegir..."] + lista_sub)
+                                if sub_sel != "Elegir...":
+                                    df_f = df_f[df_f[col_sub] == sub_sel]
+                            
+                            # Paso 3: Descripción Final
+                            opciones = sorted(df_f[col_des].unique().tolist())
+                            item = st.selectbox(f"**Lesión ({len(opciones)})**", opciones, index=None)
+                            
+                            if item:
+                                valor = float(df_f[df_f[col_des] == item][col_inc].iloc[0])
+                                st.info(f"**Valor baremo: ** **{valor}%**")
+                                if st.button("Agregar lesión"):
+                                    st.session_state.pericia.append({
+                                        "reg": f"{sector_val} {lat_sel}" if lat_sel else sector_val,
+                                        "val": valor, "miembro": region_sel, "sector": sector_val, 
+                                        "lado": lat_sel, "desc": f"{cat_sel} - {item}"
+                                    })
+                                    st.rerun()
 
-                    item = st.selectbox(f"**descripción completa ({len(opciones)})**", opciones, index=None)
-                    if item:
-                        valor = float(df_f[df_f['fulldesc'] == item][col_incap].iloc[0])
-                        st.info(f"**valor baremo: ** **{valor}%**")
-                        if st.button("agregar lesión"):
-                            st.session_state.pericia.append({"reg": f"{sector_val} {lat_sel}" if lat_sel else sector_val, "val": valor, "miembro": region_sel, "sector": sector_val, "lado": lat_sel, "desc": item})
-                            st.rerun()
-
-        else: # módulo neurológico
-            if region_sel == "columna":
-                cat_root = st.selectbox("**2. sector de raíz**", ["cervical", "dorsolumbar"], index=None)
+        else: # Módulo Neurológico (Mantiene su lógica simplificada)
+            if region_sel == "Columna":
+                cat_root = st.selectbox("**2. Sector de raíz**", ["Cervical", "Dorsolumbar"], index=None)
                 if cat_root:
-                    root_sel = st.selectbox("**3. raíz espinal**", list(RAICES_ESPINALES[cat_root].keys()), index=None)
+                    root_sel = st.selectbox("**3. Raíz Espinal**", list(RAICES_ESPINALES[cat_root].keys()), index=None)
                     if root_sel:
                         valor_r = float(RAICES_ESPINALES[cat_root][root_sel])
-                        st.warning(f"**incapacidad raíz: ** **{valor_r}%**")
-                        if st.button("agregar raíz"):
-                            st.session_state.pericia.append({"reg": f"raíz {cat_root}", "val": valor_r, "miembro": "columna", "sector": cat_root, "lado": None, "desc": root_sel})
+                        st.warning(f"**Incapacidad raíz: ** **{valor_r}%**")
+                        if st.button("Agregar raíz"):
+                            st.session_state.pericia.append({"reg": f"Raíz {cat_root}", "val": valor_r, "miembro": "Columna", "sector": cat_root, "lado": None, "desc": root_sel})
                             st.rerun()
             else:
-                lat_sel = st.selectbox("**2. lateralidad**", ["derecho", "izquierdo"], index=None)
+                lat_sel = st.selectbox("**2. Lateralidad**", ["Derecho", "Izquierdo"], index=None)
                 if lat_sel:
-                    dicc = NERVIOS_SUPERIOR if "superior" in region_sel else NERVIOS_INFERIOR
-                    nervio_sel = st.selectbox("**3. nervio periférico**", list(dicc.keys()), index=None)
+                    dicc = NERVIOS_SUPERIOR if "Superior" in region_sel else NERVIOS_INFERIOR
+                    nervio_sel = st.selectbox("**3. Nervio Periférico**", list(dicc.keys()), index=None)
                     if nervio_sel:
                         c1, c2 = st.columns(2)
-                        gm = c1.selectbox("grado m", list(TABLA_M.keys()), index=5)
-                        gs = c2.selectbox("grado s", list(TABLA_S.keys()), index=5)
+                        gm = c1.selectbox("Grado M", list(TABLA_M.keys()), index=5)
+                        gs = c2.selectbox("Grado S", list(TABLA_S.keys()), index=5)
                         n = dicc[nervio_sel]
                         valor_n = round(((TABLA_M[gm] * n['p_m']) + (TABLA_S[gs] * n['p_s'])) * n['max'] * 100, 2)
-                        st.warning(f"**incapacidad calculada: ** **{valor_n}%**")
-                        sector_dest = st.selectbox("**4. asignar a sector (tope)**", ["hombro", "brazo", "codo", "antebrazo", "muñeca", "mano"] if "superior" in region_sel else ["cadera", "muslo", "rodilla", "pierna", "tobillo", "pie"])
-                        if st.button("agregar nervio"):
-                            st.session_state.pericia.append({"reg": f"nervio {lat_sel}", "val": valor_n, "miembro": region_sel, "sector": sector_dest, "lado": lat_sel, "desc": f"{nervio_sel} ({gm}/{gs})"})
+                        st.warning(f"**Incapacidad calculada: ** **{valor_n}%**")
+                        sector_dest = st.selectbox("**4. Asignar a sector (Tope)**", ["Hombro", "Brazo", "Codo", "Antebrazo", "Muñeca", "Mano"] if "Superior" in region_sel else ["Cadera", "Muslo", "Rodilla", "Pierna", "Tobillo", "Pie"])
+                        if st.button("Agregar nervio"):
+                            st.session_state.pericia.append({"reg": f"Nervio {lat_sel}", "val": valor_n, "miembro": region_sel, "sector": sector_dest, "lado": lat_sel, "desc": f"{nervio_sel} ({gm}/{gs})"})
                             st.rerun()
 
-# --- 2. cálculos y visualización ---
+# --- 2. Visualización, Duplicados y Cálculos Finales ---
 if st.session_state.pericia:
-    st.subheader("**detalle de secuelas**")
+    st.subheader("**Detalle de secuelas**")
     conteos = {}
     for p in st.session_state.pericia:
         clave = (p['miembro'], p['lado'], p['sector'], p['desc'])
@@ -163,6 +175,7 @@ if st.session_state.pericia:
             c1.markdown(txt_r); c2.markdown(txt_d)
         if c3.button("🗑️", key=f"d_{i}"): st.session_state.pericia.pop(i); st.rerun()
 
+        # Acumulación para topes
         v, s, m, l = p['val'], p['sector'], p['miembro'].lower(), p['lado'].lower() if p['lado'] else ""
         if "columna" in m:
             if "cervical" in s: cervical_arit += v
@@ -195,21 +208,20 @@ if st.session_state.pericia:
     st.markdown("---")
     col_l, col_r = st.columns(2)
     with col_l:
-        st.markdown("### **factores de ponderación**")
-        edad = st.number_input("**edad**", 14, 99, 54) 
+        st.markdown("### **Factores de ponderación**")
+        edad = st.number_input("**Edad**", 14, 99, 54) 
         if edad < 21: f_e = 0.05
         elif 21 <= edad <= 35: f_e = 0.04
         elif 36 <= edad <= 45: f_e = 0.03
         else: f_e = 0.02 
-            
-        f_d = st.selectbox("**dificultad**", [0.05, 0.10, 0.20], format_func=lambda x: f"{int(x*100)}%")
         
+        f_d = st.selectbox("**Dificultad**", [0.05, 0.10, 0.20], format_func=lambda x: f"{int(x*100)}%")
         fisico = balthazard(v_regionales)
         factores = fisico * (f_e + f_d)
         total_f = min(fisico + factores, 65.99) if fisico < 66.0 else min(fisico + factores, 100.0)
 
     with col_r:
-        st.metric("**daño físico (balthazard)**", f"{fisico}%")
-        st.metric("**factores aplicados**", f"{round(factores, 2)}%")
+        st.metric("**Daño físico (Balthazard)**", f"{fisico}%")
+        st.metric("**Factores aplicados**", f"{round(factores, 2)}%")
         st.success(f"## **ILP FINAL: ** **{round(total_f, 2)}%**")
-        if st.button("🚨 reiniciar"): st.session_state.pericia = []; st.rerun()
+        if st.button("🚨 Reiniciar"): st.session_state.pericia = []; st.rerun()
