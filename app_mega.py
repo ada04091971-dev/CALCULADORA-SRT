@@ -30,7 +30,7 @@ st.markdown("---")
 
 xls = abrir_excel()
 
-# --- Diccionarios Neurológicos (Hardcoded según Baremo) ---
+# --- Diccionarios Neurológicos (Hardcoded según Baremo 549/25) ---
 TABLA_M = {"M0": 1.0, "M1": 0.8, "M2": 0.8, "M3": 0.5, "M4": 0.2, "M5": 0.0}
 TABLA_S = {"S0": 1.0, "S1": 0.8, "S2": 0.8, "S3": 0.5, "S4": 0.2, "S5": 0.0}
 
@@ -63,7 +63,6 @@ with st.sidebar:
         nombre_real = next((s for s in xls.sheet_names if "psiquiatr" in s.lower()), None)
         if nombre_real:
             df_psi = pd.read_excel(xls, sheet_name=nombre_real).fillna("")
-            # Buscamos columnas de Categoría (Denominación) y Descripción (Grado)
             col_cat = next((c for c in df_psi.columns if "categor" in c.lower()), df_psi.columns[0])
             col_des = next((c for c in df_psi.columns if "descrip" in c.lower()), df_psi.columns[1])
             col_inc = next((c for c in df_psi.columns if "incap" in c.lower() or "%" in c.lower()), df_psi.columns[-1])
@@ -101,6 +100,8 @@ with st.sidebar:
                 st.rerun()
 
     elif cap_sel == "Osteoarticular":
+        # INICIALIZACIÓN CRÍTICA PARA EVITAR NAMEERROR
+        sec_val, hoja = None, None
         sub_reg = st.selectbox("**Región**", ["Columna", "Miembro Superior", "Miembro Inferior"], index=None)
         if sub_reg == "Columna":
             sectores = ["Cervical", "Dorsal", "Lumbar", "Sacrococcigea"]
@@ -116,7 +117,6 @@ with st.sidebar:
             nombre_real = next((s for s in xls.sheet_names if hoja.lower() == s.lower().strip()), None)
             if nombre_real:
                 df = pd.read_excel(xls, sheet_name=nombre_real).fillna("")
-                # Filtrar por sector en la columna 'Sector' del excel
                 col_sector = next((c for c in df.columns if "sector" in c.lower()), df.columns[0])
                 df_f = df[df[col_sector].astype(str).str.contains(sec_val, case=False, na=False)]
                 
@@ -144,7 +144,6 @@ if st.session_state.pericia:
 
     for i, p in enumerate(st.session_state.pericia):
         c1, c2, c3 = st.columns([2, 6, 1])
-        # PROTECCIÓN CONTRA KEYERROR USANDO .get()
         cap = p.get('cap', 'Osteoarticular')
         reg = p.get('reg', 'N/A')
         val = p.get('val', 0.0)
@@ -156,7 +155,6 @@ if st.session_state.pericia:
         c2.write(f"{desc} (**{val}%**)")
         if c3.button("🗑️", key=f"del_{i}"): st.session_state.pericia.pop(i); st.rerun()
 
-        # Clasificación para topes
         if cap == "Psiquiatría":
             otros_capitulos.append(val)
         elif "cervical" in sector or "cervical" in reg.lower(): acum_cervical += val
@@ -166,13 +164,12 @@ if st.session_state.pericia:
             m_llave = f"{'superior' if 'superior' in reg.lower() else 'inferior'} {lado}"
             if m_llave in miembros: miembros[m_llave][sector] = miembros[m_llave].get(sector, 0.0) + val
 
-    # --- Aplicación de Topes Regionales ---
     v_balthazard = []
-    # Columna
+    # Columna: Tope Cervical (40%) + Dorsolumbar (60%)
     col_final = min(min(acum_cervical, 40.0) + min(acum_dorsolumbar, 60.0) + acum_sacro, 100.0)
     if col_final > 0: v_balthazard.append(col_final)
     
-    # Miembros (Lógica de Escalera)
+    # Miembros (Lógica de Escalera Infranqueable)
     for m, datos in miembros.items():
         if datos:
             if "superior" in m:
@@ -186,7 +183,7 @@ if st.session_state.pericia:
                 s3 = min(s2 + datos.get("rodilla",0), 55.0)
                 v_balthazard.append(min(s3 + datos.get("muslo",0) + datos.get("cadera",0), 70.0))
     
-    # Otros (Psiquiatría)
+    # Salud Mental (D.V.A.)
     for v in otros_capitulos: v_balthazard.append(v)
 
     st.markdown("---")
@@ -194,7 +191,7 @@ if st.session_state.pericia:
     with col_l:
         st.markdown("### **Factores de Ponderación (Decreto 549/25)**")
         edad = st.number_input("**Edad al momento de la consolidación**", 14, 99, 54)
-        # Tabla exacta pág 6
+        # Rangos página 6: <21, 21-35, 36-45, >45
         f_e = 0.05 if edad < 21 else 0.04 if edad <= 35 else 0.03 if edad <= 45 else 0.02
         
         dif_map = {"Leve (5%)": 0.05, "Intermedia (10%)": 0.10, "Alta (20%)": 0.20}
@@ -202,7 +199,8 @@ if st.session_state.pericia:
         
         fisico = balthazard(v_balthazard)
         factores = fisico * (f_e + f_d)
-        # Barrera del 65.99%
+        
+        # Barrera de incapacidad total: si físico < 66%, el final NO toca 66%
         total_f = min(fisico + factores, 65.99) if fisico < 66.0 else min(fisico + factores, 100.0)
 
     with col_r:
