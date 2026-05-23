@@ -13,6 +13,16 @@ def abrir_excel():
         st.stop()
     return pd.ExcelFile(archivo)
 
+def find_column(columns, keywords, default, exclude_keywords=None):
+    """Encuentra una columna basada en palabras clave, ignorando ciertas palabras excluidas."""
+    if exclude_keywords is None:
+        exclude_keywords = []
+    for c in columns:
+        c_lower = str(c).lower()
+        if any(k in c_lower for k in keywords) and not any(ek in c_lower for ek in exclude_keywords):
+            return c
+    return default
+
 def balthazard(lista):
     """Método de la capacidad restante (Balthazard)."""
     lista = sorted([x for x in lista if x > 0], reverse=True)
@@ -63,9 +73,9 @@ with st.sidebar:
         nombre_real = next((s for s in xls.sheet_names if "psiquiatr" in s.lower()), None)
         if nombre_real:
             df_psi = pd.read_excel(xls, sheet_name=nombre_real).fillna("")
-            col_cat = next((c for c in df_psi.columns if "categor" in c.lower()), df_psi.columns[0])
-            col_des = next((c for c in df_psi.columns if "descrip" in c.lower()), df_psi.columns[1])
-            col_inc = next((c for c in df_psi.columns if "incap" in c.lower() or "%" in c.lower()), df_psi.columns[-1])
+            col_cat = find_column(df_psi.columns, ["categor"], df_psi.columns[0])
+            col_des = find_column(df_psi.columns, ["descrip"], df_psi.columns[1])
+            col_inc = find_column(df_psi.columns, ["incap", "%"], df_psi.columns[-1])
 
             denominacion = st.selectbox("**Denominación**", sorted(df_psi[col_cat].unique().tolist()))
             if denominacion:
@@ -117,17 +127,17 @@ with st.sidebar:
             nombre_real = next((s for s in xls.sheet_names if hoja.lower() == s.lower().strip()), None)
             if nombre_real:
                 df = pd.read_excel(xls, sheet_name=nombre_real).fillna("")
-                col_sector = next((c for c in df.columns if "sector" in c.lower()), df.columns[0])
+                col_sector = find_column(df.columns, ["sector"], df.columns[0])
                 df_f = df[df[col_sector].astype(str).str.contains(sec_val, case=False, na=False)]
                 
-                col_cat = next((c for c in df_f.columns if "categor" in c.lower() and "sub" not in c.lower()), "Categoría")
+                col_cat = find_column(df_f.columns, ["categor"], "Categoría", exclude_keywords=["sub"])
                 cat = st.selectbox("Categoría", ["Elegir..."] + sorted(df_f[col_cat].unique().tolist()))
                 if cat != "Elegir...":
                     df_f = df_f[df_f[col_cat] == cat]
-                    col_des = next((c for c in df_f.columns if "descrip" in c.lower()), "Descripción")
+                    col_des = find_column(df_f.columns, ["descrip"], "Descripción")
                     item = st.selectbox("Lesión", sorted(df_f[col_des].unique().tolist()), index=None)
                     if item:
-                        col_inc = next((c for c in df_f.columns if "incap" in c.lower() or "%" in c.lower()), "%")
+                        col_inc = find_column(df_f.columns, ["incap", "%"], "%")
                         valor = float(df_f[df_f[col_des] == item][col_inc].iloc[0])
                         st.info(f"**Valor: {valor}%**")
                         if st.button("Agregar Lesión"):
