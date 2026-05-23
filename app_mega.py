@@ -184,7 +184,7 @@ if st.session_state.pericia:
                 v_balthazard.append(min(s3 + datos.get("muslo",0) + datos.get("cadera",0), 70.0))
     
     # Salud Mental (D.V.A.)
-    for v in otros_capitulos: v_balthazard.append(v)
+    v_balthazard.extend(otros_capitulos)
 
     st.markdown("---")
     col_l, col_r = st.columns(2)
