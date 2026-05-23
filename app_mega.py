@@ -12,6 +12,10 @@ def abrir_excel():
         st.error(f"No se encontró el archivo '{archivo}' en la carpeta de GitHub.")
         st.stop()
     return pd.ExcelFile(archivo)
+@st.cache_data
+def cargar_hoja_excel(_xls, sheet_name):
+    return pd.read_excel(_xls, sheet_name=sheet_name).fillna("")
+
 
 def balthazard(lista):
     """Método de la capacidad restante (Balthazard)."""
@@ -62,7 +66,7 @@ with st.sidebar:
         st.subheader("🧠 Salud Mental (D.V.A.)")
         nombre_real = next((s for s in xls.sheet_names if "psiquiatr" in s.lower()), None)
         if nombre_real:
-            df_psi = pd.read_excel(xls, sheet_name=nombre_real).fillna("")
+            df_psi = cargar_hoja_excel(xls, nombre_real)
             col_cat = next((c for c in df_psi.columns if "categor" in c.lower()), df_psi.columns[0])
             col_des = next((c for c in df_psi.columns if "descrip" in c.lower()), df_psi.columns[1])
             col_inc = next((c for c in df_psi.columns if "incap" in c.lower() or "%" in c.lower()), df_psi.columns[-1])
@@ -116,7 +120,7 @@ with st.sidebar:
         if sec_val and hoja:
             nombre_real = next((s for s in xls.sheet_names if hoja.lower() == s.lower().strip()), None)
             if nombre_real:
-                df = pd.read_excel(xls, sheet_name=nombre_real).fillna("")
+                df = cargar_hoja_excel(xls, nombre_real)
                 col_sector = next((c for c in df.columns if "sector" in c.lower()), df.columns[0])
                 df_f = df[df[col_sector].astype(str).str.contains(sec_val, case=False, na=False)]
                 
