@@ -155,13 +155,14 @@ if st.session_state.pericia:
         c2.write(f"{desc} (**{val}%**)")
         if c3.button("🗑️", key=f"del_{i}"): st.session_state.pericia.pop(i); st.rerun()
 
+        reg_lower = reg.lower()
         if cap == "Psiquiatría":
             otros_capitulos.append(val)
-        elif "cervical" in sector or "cervical" in reg.lower(): acum_cervical += val
-        elif any(x in sector or x in reg.lower() for x in ["dorsal", "lumbar"]): acum_dorsolumbar += val
-        elif any(x in sector or x in reg.lower() for x in ["sacro", "coxis"]): acum_sacro += val
+        elif "cervical" in sector or "cervical" in reg_lower: acum_cervical += val
+        elif any(x in sector or x in reg_lower for x in ["dorsal", "lumbar"]): acum_dorsolumbar += val
+        elif any(x in sector or x in reg_lower for x in ["sacro", "coxis"]): acum_sacro += val
         elif lado:
-            m_llave = f"{'superior' if 'superior' in reg.lower() else 'inferior'} {lado}"
+            m_llave = f"{'superior' if 'superior' in reg_lower else 'inferior'} {lado}"
             if m_llave in miembros: miembros[m_llave][sector] = miembros[m_llave].get(sector, 0.0) + val
 
     v_balthazard = []
