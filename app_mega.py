@@ -22,6 +22,44 @@ def balthazard(lista):
         total = total + (lista[i] * (100 - total) / 100)
     return round(total, 2)
 
+
+def procesar_lesion_osteoarticular(xls, sec_val, hoja, lat=None):
+    if not (sec_val and hoja):
+        return
+
+    nombre_real = next((s for s in xls.sheet_names if hoja.lower() == s.lower().strip()), None)
+    if not nombre_real:
+        return
+
+    df = pd.read_excel(xls, sheet_name=nombre_real).fillna("")
+    col_sector = next((c for c in df.columns if "sector" in c.lower()), df.columns[0])
+    df_f = df[df[col_sector].astype(str).str.contains(sec_val, case=False, na=False)]
+
+    col_cat = next((c for c in df_f.columns if "categor" in c.lower() and "sub" not in c.lower()), "Categoría")
+    cat = st.selectbox("Categoría", ["Elegir..."] + sorted(df_f[col_cat].unique().tolist()))
+    if cat == "Elegir...":
+        return
+
+    df_f = df_f[df_f[col_cat] == cat]
+    col_des = next((c for c in df_f.columns if "descrip" in c.lower()), "Descripción")
+    item = st.selectbox("Lesión", sorted(df_f[col_des].unique().tolist()), index=None)
+    if not item:
+        return
+
+    col_inc = next((c for c in df_f.columns if "incap" in c.lower() or "%" in c.lower()), "%")
+    valor = float(df_f[df_f[col_des] == item][col_inc].iloc[0])
+    st.info(f"**Valor: {valor}%**")
+    if st.button("Agregar Lesión"):
+        st.session_state.pericia.append({
+            "cap": "Osteoarticular",
+            "reg": hoja,
+            "val": valor,
+            "desc": f"{cat}: {item}",
+            "sector": sec_val,
+            "lado": lat
+        })
+        st.rerun()
+
 if 'pericia' not in st.session_state:
     st.session_state.pericia = []
 
@@ -57,7 +95,7 @@ RAICES = {
 with st.sidebar:
     st.header("**Carga de Hallazgos**")
     cap_sel = st.selectbox("**1. Capítulo del Baremo**", ["Osteoarticular", "Neurológica", "Psiquiatría"], index=None)
-    
+
     if cap_sel == "Psiquiatría":
         st.subheader("🧠 Salud Mental (D.V.A.)")
         nombre_real = next((s for s in xls.sheet_names if "psiquiatr" in s.lower()), None)
@@ -112,32 +150,13 @@ with st.sidebar:
             sectores = ["Hombro", "Brazo", "Codo", "Antebrazo", "Muñeca", "Mano", "Dedos"] if "Superior" in sub_reg else ["Cadera", "Muslo", "Rodilla", "Pierna", "Tobillo", "Pie", "Dedos"]
             sec_val = st.selectbox("Sector", sectores, index=None)
             hoja = f"{sub_reg} {lat}"
-        
-        if sec_val and hoja:
-            nombre_real = next((s for s in xls.sheet_names if hoja.lower() == s.lower().strip()), None)
-            if nombre_real:
-                df = pd.read_excel(xls, sheet_name=nombre_real).fillna("")
-                col_sector = next((c for c in df.columns if "sector" in c.lower()), df.columns[0])
-                df_f = df[df[col_sector].astype(str).str.contains(sec_val, case=False, na=False)]
-                
-                col_cat = next((c for c in df_f.columns if "categor" in c.lower() and "sub" not in c.lower()), "Categoría")
-                cat = st.selectbox("Categoría", ["Elegir..."] + sorted(df_f[col_cat].unique().tolist()))
-                if cat != "Elegir...":
-                    df_f = df_f[df_f[col_cat] == cat]
-                    col_des = next((c for c in df_f.columns if "descrip" in c.lower()), "Descripción")
-                    item = st.selectbox("Lesión", sorted(df_f[col_des].unique().tolist()), index=None)
-                    if item:
-                        col_inc = next((c for c in df_f.columns if "incap" in c.lower() or "%" in c.lower()), "%")
-                        valor = float(df_f[df_f[col_des] == item][col_inc].iloc[0])
-                        st.info(f"**Valor: {valor}%**")
-                        if st.button("Agregar Lesión"):
-                            st.session_state.pericia.append({"cap": "Osteoarticular", "reg": hoja, "val": valor, "desc": f"{cat}: {item}", "sector": sec_val, "lado": lat if 'lat' in locals() else None})
-                            st.rerun()
+
+        procesar_lesion_osteoarticular(xls, sec_val, hoja, lat if 'lat' in locals() else None)
 
 # --- 2. Cálculos y Visualización ---
 if st.session_state.pericia:
     st.subheader("**Detalle de la Pericia Médica**")
-    
+
     acum_cervical, acum_dorsolumbar, acum_sacro = 0.0, 0.0, 0.0
     miembros = {"superior derecho": {}, "superior izquierdo": {}, "inferior derecho": {}, "inferior izquierdo": {}}
     otros_capitulos = []
@@ -168,7 +187,7 @@ if st.session_state.pericia:
     # Columna: Tope Cervical (40%) + Dorsolumbar (60%)
     col_final = min(min(acum_cervical, 40.0) + min(acum_dorsolumbar, 60.0) + acum_sacro, 100.0)
     if col_final > 0: v_balthazard.append(col_final)
-    
+
     # Miembros (Lógica de Escalera Infranqueable)
     for m, datos in miembros.items():
         if datos:
@@ -182,7 +201,7 @@ if st.session_state.pericia:
                 s2 = min(s1 + datos.get("pierna",0), 40.0)
                 s3 = min(s2 + datos.get("rodilla",0), 55.0)
                 v_balthazard.append(min(s3 + datos.get("muslo",0) + datos.get("cadera",0), 70.0))
-    
+
     # Salud Mental (D.V.A.)
     for v in otros_capitulos: v_balthazard.append(v)
 
@@ -193,13 +212,13 @@ if st.session_state.pericia:
         edad = st.number_input("**Edad al momento de la consolidación**", 14, 99, 54)
         # Rangos página 6: <21, 21-35, 36-45, >45
         f_e = 0.05 if edad < 21 else 0.04 if edad <= 35 else 0.03 if edad <= 45 else 0.02
-        
+
         dif_map = {"Leve (5%)": 0.05, "Intermedia (10%)": 0.10, "Alta (20%)": 0.20}
         f_d = dif_map[st.selectbox("**Dificultad para tareas habituales**", list(dif_map.keys()))]
-        
+
         fisico = balthazard(v_balthazard)
         factores = fisico * (f_e + f_d)
-        
+
         # Barrera de incapacidad total: si físico < 66%, el final NO toca 66%
         total_f = min(fisico + factores, 65.99) if fisico < 66.0 else min(fisico + factores, 100.0)
 
