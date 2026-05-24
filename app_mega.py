@@ -13,14 +13,20 @@ def abrir_excel():
         st.stop()
     return pd.ExcelFile(archivo)
 
-def balthazard(lista):
-    """Método de la capacidad restante (Balthazard)."""
+def balthazard(lista, preexistencia=0.0):
+    """Método de la capacidad restante (Balthazard) considerando incapacidad preexistente."""
     lista = sorted([x for x in lista if x > 0], reverse=True)
     if not lista: return 0.0
-    total = lista[0]
-    for i in range(1, len(lista)):
-        total = total + (lista[i] * (100 - total) / 100)
-    return round(total, 2)
+
+    capacidad_restante = 100.0 - preexistencia
+    incapacidad_nueva_total = 0.0
+
+    for inc in lista:
+        valor_real = inc * capacidad_restante / 100.0
+        incapacidad_nueva_total += valor_real
+        capacidad_restante -= valor_real
+
+    return round(incapacidad_nueva_total, 2)
 
 if 'pericia' not in st.session_state:
     st.session_state.pericia = []
@@ -239,6 +245,9 @@ if st.session_state.pericia:
     col_l, col_r = st.columns(2)
     with col_l:
         st.markdown("### **Factores de Ponderación (Decreto 549/25)**")
+
+        preexistencia = st.number_input("**Incapacidad Preexistente (%)** (Capacidad restante)", 0.0, 99.0, 0.0, step=0.1)
+
         edad = st.number_input("**Edad al momento de la consolidación**", 14, 99, 54)
         # Rangos página 6: <21, 21-35, 36-45, >45
         f_e = 0.05 if edad < 21 else 0.04 if edad <= 35 else 0.03 if edad <= 45 else 0.02
@@ -246,7 +255,7 @@ if st.session_state.pericia:
         dif_map = {"Leve (5%)": 0.05, "Intermedia (10%)": 0.10, "Alta (20%)": 0.20}
         f_d = dif_map[st.selectbox("**Dificultad para tareas habituales**", list(dif_map.keys()))]
 
-        fisico = balthazard(v_balthazard)
+        fisico = balthazard(v_balthazard, preexistencia)
         factores = fisico * (f_e + f_d)
 
         # Barrera de incapacidad total: si físico < 66%, el final NO toca 66%
@@ -264,6 +273,9 @@ if st.session_state.pericia:
             informe_txt += f" - {p.get('cap', '')} | {p.get('reg', '')}: {p.get('desc', '')} -> {p.get('val', 0.0)}%\n"
 
         informe_txt += f"\n2. CÁLCULO DE INCAPACIDAD FÍSICA:\n"
+        if preexistencia > 0:
+            informe_txt += f" - Incapacidad Preexistente: {preexistencia}%\n"
+            informe_txt += f" - Capacidad Restante Inicial: {round(100.0 - preexistencia, 2)}%\n"
         informe_txt += f" - Daño Físico Global (Balthazard): {fisico}%\n"
 
         informe_txt += f"\n3. FACTORES DE PONDERACIÓN:\n"
