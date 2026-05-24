@@ -4,7 +4,7 @@ import os
 
 st.set_page_config(page_title="Calculadora Laboral SRT", layout="wide")
 
-@st.cache_data
+@st.cache_resource
 def abrir_excel():
     archivo = "calculadora_final_srt.xlsx"
     if not os.path.exists(archivo):
