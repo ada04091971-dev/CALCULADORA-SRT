@@ -2,19 +2,18 @@ import streamlit as st
 import pandas as pd
 import os
 
-# 1. Configuración de la aplicación
-st.set_page_config(page_title="Calculadora Laboral SRT - Decreto 549/25", layout="wide", page_icon="🧮")
+st.set_page_config(page_title="Calculadora Laboral SRT", layout="wide")
 
-@st.cache_resource
+@st.cache_data
 def abrir_excel():
     archivo = "calculadora_final_srt.xlsx"
     if not os.path.exists(archivo):
-        st.error(f"No se encontró el archivo '{archivo}' en la carpeta de GitHub.")
+        st.error("No se encontró calculadora_final_srt.xlsx")
         st.stop()
     return pd.ExcelFile(archivo)
 
 def balthazard(lista):
-    """Método de la capacidad restante (Balthazard)."""
+    if not lista: return 0.0
     lista = sorted([x for x in lista if x > 0], reverse=True)
     if not lista: return 0.0
     total = lista[0]
@@ -30,11 +29,13 @@ st.markdown("---")
 
 xls = abrir_excel()
 
-# --- Diccionarios Neurológicos (Hardcoded según Baremo 549/25) ---
-TABLA_M = {"M0": 1.0, "M1": 0.8, "M2": 0.8, "M3": 0.5, "M4": 0.2, "M5": 0.0}
-TABLA_S = {"S0": 1.0, "S1": 0.8, "S2": 0.8, "S3": 0.5, "S4": 0.2, "S5": 0.0}
+# --- 1. SELECCIÓN DE LESIONES ---
+TABLA_M = {"M5": 0.0, "M4": 0.20, "M3": 0.40, "M2": 0.60, "M1": 0.80, "M0": 1.0}
+TABLA_S = {"S4": 0.0, "S3": 0.15, "S2": 0.40, "S1": 0.70, "S0": 1.0}
 
 NERVIOS_UPPER = {
+    "Nervio Circunflejo": {"p_m": 0.8, "p_s": 0.2, "max": 0.20},
+    "Nervio Musculocutáneo": {"p_m": 0.7, "p_s": 0.3, "max": 0.30},
     "Nervio Mediano Proximal": {"p_m": 0.7, "p_s": 0.3, "max": 0.40},
     "Nervio Mediano Distal": {"p_m": 0.4, "p_s": 0.6, "max": 0.25},
     "Nervio Cubital Proximal": {"p_m": 0.7, "p_s": 0.3, "max": 0.35},
@@ -57,7 +58,7 @@ RAICES = {
 with st.sidebar:
     st.header("**Carga de Hallazgos**")
     cap_sel = st.selectbox("**1. Capítulo del Baremo**", ["Osteoarticular", "Neurológica", "Psiquiatría"], index=None)
-
+    
     if cap_sel == "Psiquiatría":
         st.subheader("🧠 Salud Mental (D.V.A.)")
         nombre_real = next((s for s in xls.sheet_names if "psiquiatr" in s.lower()), None)
@@ -112,30 +113,60 @@ with st.sidebar:
             sectores = ["Hombro", "Brazo", "Codo", "Antebrazo", "Muñeca", "Mano", "Dedos"] if "Superior" in sub_reg else ["Cadera", "Muslo", "Rodilla", "Pierna", "Tobillo", "Pie", "Dedos"]
             sec_val = st.selectbox("Sector", sectores, index=None)
             hoja = f"{sub_reg} {lat}"
-
+        
         if sec_val and hoja:
             nombre_real = next((s for s in xls.sheet_names if hoja.lower() == s.lower().strip()), None)
             if nombre_real:
                 df = pd.read_excel(xls, sheet_name=nombre_real).fillna("")
                 col_sector = next((c for c in df.columns if "sector" in c.lower()), df.columns[0])
                 df_f = df[df[col_sector].astype(str).str.contains(sec_val, case=False, na=False)]
-
+                
                 col_cat = next((c for c in df_f.columns if "categor" in c.lower() and "sub" not in c.lower()), "Categoría")
                 cat = st.selectbox("Categoría", ["Elegir..."] + sorted(df_f[col_cat].unique().tolist()))
                 if cat != "Elegir...":
                     df_f = df_f[df_f[col_cat] == cat]
                     col_des = next((c for c in df_f.columns if "descrip" in c.lower()), "Descripción")
                     col_sub = next((c for c in df_f.columns if "subcategor" in c.lower()), None)
-                    item = st.selectbox("Lesión", sorted(df_f[col_des].unique().tolist()), index=None)
+                    
+                    opciones_lesion = sorted(df_f[col_des].unique().tolist())
+                    
+                    # Filtro Goniométrico: Si las lesiones contienen el símbolo de grados "°", permitir filtrar
+                    sugerencia_index = None
+                    if any("°" in str(x) for x in opciones_lesion):
+                        grados_medidos = st.number_input("Opcional: Ingrese grados medidos para filtrar automáticamente", min_value=0, max_value=360, value=None, step=1)
+                        if grados_medidos is not None:
+                            import re
+                            for idx, opt in enumerate(opciones_lesion):
+                                opt_str = str(opt).replace(" ", "")
+                                
+                                # Caso 1: Rango (e.g. >10°y<30°, >0°y≤10°)
+                                # Asumiremos las lógicas estándar de los baremos
+                                nums = [int(n) for n in re.findall(r'\d+', opt_str)]
+                                if len(nums) == 2:
+                                    if nums[0] < grados_medidos <= nums[1] or nums[0] <= grados_medidos < nums[1]:
+                                        sugerencia_index = idx
+                                        break
+                                # Caso 2: Valor único exacto (e.g. Flexión 0°)
+                                elif len(nums) == 1:
+                                    if grados_medidos == nums[0]:
+                                        sugerencia_index = idx
+                                        break
+                            
+                            if sugerencia_index is not None:
+                                st.success(f"Sugerencia automática aplicada: **{opciones_lesion[sugerencia_index]}**")
+                            else:
+                                st.warning("No se encontró un rango exacto para los grados ingresados. Seleccione manualmente.")
+
+                    item = st.selectbox("Lesión", opciones_lesion, index=sugerencia_index)
                     if item:
                         fila_seleccionada = df_f[df_f[col_des] == item].iloc[0]
                         col_inc = next((c for c in df_f.columns if "incap" in c.lower() or "%" in c.lower()), "%")
                         valor = float(fila_seleccionada[col_inc])
-
+                        
                         subcat_val = str(fila_seleccionada.get(col_sub, '')).strip() if col_sub else ''
                         subcat = f" - {subcat_val}" if subcat_val and subcat_val.lower() not in [item.lower(), cat.lower()] else ""
                         desc_final = f"{cat}{subcat}: {item}"
-
+                        
                         st.info(f"**Valor: {valor}%**")
                         if st.button("Agregar Lesión"):
                             st.session_state.pericia.append({"cap": "Osteoarticular", "reg": hoja, "val": valor, "desc": desc_final, "sector": sec_val, "lado": lat if 'lat' in locals() else None})
@@ -144,6 +175,16 @@ with st.sidebar:
 # --- 2. Cálculos y Visualización ---
 if st.session_state.pericia:
     st.subheader("**Detalle de la Pericia Médica**")
+    
+    # Validaciones de exclusión mutua
+    for i, p1 in enumerate(st.session_state.pericia):
+        for j, p2 in enumerate(st.session_state.pericia):
+            if i < j and p1.get('reg') == p2.get('reg') and p1.get('cap') == 'Osteoarticular':
+                d1 = p1.get('desc', '').lower()
+                d2 = p2.get('desc', '').lower()
+                if ('anquilosis' in d1 and 'limitación funcional' in d2) or ('anquilosis' in d2 and 'limitación funcional' in d1):
+                    st.warning(f"⚠️ **Atención:** Hay una 'Anquilosis' y una 'Limitación Funcional' en la misma región ({p1.get('reg')}). Según el baremo, generalmente no deben sumarse.")
+                    break
 
     acum_cervical, acum_dorsolumbar, acum_sacro = 0.0, 0.0, 0.0
     miembros = {"superior derecho": {}, "superior izquierdo": {}, "inferior derecho": {}, "inferior izquierdo": {}}
@@ -177,7 +218,7 @@ if st.session_state.pericia:
     # Columna: Tope Cervical (40%) + Dorsolumbar (60%)
     col_final = min(min(acum_cervical, 40.0) + min(acum_dorsolumbar, 60.0) + acum_sacro, 100.0)
     if col_final > 0: v_balthazard.append(col_final)
-
+    
     # Miembros (Lógica de Escalera Infranqueable)
     for m, datos in miembros.items():
         if datos:
@@ -191,7 +232,7 @@ if st.session_state.pericia:
                 s2 = min(s1 + datos.get("pierna",0), 40.0)
                 s3 = min(s2 + datos.get("rodilla",0), 55.0)
                 v_balthazard.append(min(s3 + datos.get("muslo",0) + datos.get("cadera",0), 70.0))
-
+    
     # Salud Mental (D.V.A.)
     for v in otros_capitulos: v_balthazard.append(v)
 
@@ -202,13 +243,13 @@ if st.session_state.pericia:
         edad = st.number_input("**Edad al momento de la consolidación**", 14, 99, 54)
         # Rangos página 6: <21, 21-35, 36-45, >45
         f_e = 0.05 if edad < 21 else 0.04 if edad <= 35 else 0.03 if edad <= 45 else 0.02
-
+        
         dif_map = {"Leve (5%)": 0.05, "Intermedia (10%)": 0.10, "Alta (20%)": 0.20}
         f_d = dif_map[st.selectbox("**Dificultad para tareas habituales**", list(dif_map.keys()))]
-
+        
         fisico = balthazard(v_balthazard)
         factores = fisico * (f_e + f_d)
-
+        
         # Barrera de incapacidad total: si físico < 66%, el final NO toca 66%
         total_f = min(fisico + factores, 65.99) if fisico < 66.0 else min(fisico + factores, 100.0)
 
@@ -216,6 +257,32 @@ if st.session_state.pericia:
         st.metric("**Daño Físico Global (Balthazard)**", f"{fisico}%")
         st.metric("**Suma de Factores**", f"{round(factores, 2)}%")
         st.success(f"## **ILP FINAL: {round(total_f, 2)}%**")
+        
+        # --- Exportación de Informe ---
+        informe_txt = f"INFORME PERICIAL MÉDICO - DECRETO 549/25\n{'='*40}\n\n"
+        informe_txt += "1. DETALLE DE LESIONES:\n"
+        for p in st.session_state.pericia:
+            informe_txt += f" - {p.get('cap', '')} | {p.get('reg', '')}: {p.get('desc', '')} -> {p.get('val', 0.0)}%\n"
+        
+        informe_txt += f"\n2. CÁLCULO DE INCAPACIDAD FÍSICA:\n"
+        informe_txt += f" - Daño Físico Global (Balthazard): {fisico}%\n"
+        
+        informe_txt += f"\n3. FACTORES DE PONDERACIÓN:\n"
+        informe_txt += f" - Edad ({edad} años): {f_e * 100}%\n"
+        informe_txt += f" - Dificultad para Tareas Habituales: {f_d * 100}%\n"
+        informe_txt += f" - Suma de Factores Aplicada: {round(factores, 2)}%\n"
+        
+        informe_txt += f"\n{'='*40}\n"
+        informe_txt += f"ILP FINAL: {round(total_f, 2)}%\n"
+        informe_txt += f"{'='*40}\n"
+        
+        st.download_button(
+            label="📄 Descargar Informe Pericial (.txt)",
+            data=informe_txt,
+            file_name="informe_pericial_srt.txt",
+            mime="text/plain"
+        )
+
         if st.button("🚨 Reiniciar Pericia"):
             st.session_state.pericia = []
             st.rerun()
