@@ -126,7 +126,37 @@ with st.sidebar:
                     df_f = df_f[df_f[col_cat] == cat]
                     col_des = next((c for c in df_f.columns if "descrip" in c.lower()), "Descripción")
                     col_sub = next((c for c in df_f.columns if "subcategor" in c.lower()), None)
-                    item = st.selectbox("Lesión", sorted(df_f[col_des].unique().tolist()), index=None)
+
+                    opciones_lesion = sorted(df_f[col_des].unique().tolist())
+
+                    # Filtro Goniométrico: Si las lesiones contienen el símbolo de grados "°", permitir filtrar
+                    sugerencia_index = None
+                    if any("°" in str(x) for x in opciones_lesion):
+                        grados_medidos = st.number_input("Opcional: Ingrese grados medidos para filtrar automáticamente", min_value=0, max_value=360, value=None, step=1)
+                        if grados_medidos is not None:
+                            import re
+                            for idx, opt in enumerate(opciones_lesion):
+                                opt_str = str(opt).replace(" ", "")
+
+                                # Caso 1: Rango (e.g. >10°y<30°, >0°y≤10°)
+                                # Asumiremos las lógicas estándar de los baremos
+                                nums = [int(n) for n in re.findall(r'\d+', opt_str)]
+                                if len(nums) == 2:
+                                    if nums[0] < grados_medidos <= nums[1] or nums[0] <= grados_medidos < nums[1]:
+                                        sugerencia_index = idx
+                                        break
+                                # Caso 2: Valor único exacto (e.g. Flexión 0°)
+                                elif len(nums) == 1:
+                                    if grados_medidos == nums[0]:
+                                        sugerencia_index = idx
+                                        break
+
+                            if sugerencia_index is not None:
+                                st.success(f"Sugerencia automática aplicada: **{opciones_lesion[sugerencia_index]}**")
+                            else:
+                                st.warning("No se encontró un rango exacto para los grados ingresados. Seleccione manualmente.")
+
+                    item = st.selectbox("Lesión", opciones_lesion, index=sugerencia_index)
                     if item:
                         fila_seleccionada = df_f[df_f[col_des] == item].iloc[0]
                         col_inc = next((c for c in df_f.columns if "incap" in c.lower() or "%" in c.lower()), "%")
@@ -144,6 +174,16 @@ with st.sidebar:
 # --- 2. Cálculos y Visualización ---
 if st.session_state.pericia:
     st.subheader("**Detalle de la Pericia Médica**")
+
+    # Validaciones de exclusión mutua
+    for i, p1 in enumerate(st.session_state.pericia):
+        for j, p2 in enumerate(st.session_state.pericia):
+            if i < j and p1.get('reg') == p2.get('reg') and p1.get('cap') == 'Osteoarticular':
+                d1 = p1.get('desc', '').lower()
+                d2 = p2.get('desc', '').lower()
+                if ('anquilosis' in d1 and 'limitación funcional' in d2) or ('anquilosis' in d2 and 'limitación funcional' in d1):
+                    st.warning(f"⚠️ **Atención:** Hay una 'Anquilosis' y una 'Limitación Funcional' en la misma región ({p1.get('reg')}). Según el baremo, generalmente no deben sumarse.")
+                    break
 
     acum_cervical, acum_dorsolumbar, acum_sacro = 0.0, 0.0, 0.0
     miembros = {"superior derecho": {}, "superior izquierdo": {}, "inferior derecho": {}, "inferior izquierdo": {}}
@@ -216,6 +256,32 @@ if st.session_state.pericia:
         st.metric("**Daño Físico Global (Balthazard)**", f"{fisico}%")
         st.metric("**Suma de Factores**", f"{round(factores, 2)}%")
         st.success(f"## **ILP FINAL: {round(total_f, 2)}%**")
+
+        # --- Exportación de Informe ---
+        informe_txt = f"INFORME PERICIAL MÉDICO - DECRETO 549/25\n{'='*40}\n\n"
+        informe_txt += "1. DETALLE DE LESIONES:\n"
+        for p in st.session_state.pericia:
+            informe_txt += f" - {p.get('cap', '')} | {p.get('reg', '')}: {p.get('desc', '')} -> {p.get('val', 0.0)}%\n"
+
+        informe_txt += f"\n2. CÁLCULO DE INCAPACIDAD FÍSICA:\n"
+        informe_txt += f" - Daño Físico Global (Balthazard): {fisico}%\n"
+
+        informe_txt += f"\n3. FACTORES DE PONDERACIÓN:\n"
+        informe_txt += f" - Edad ({edad} años): {f_e * 100}%\n"
+        informe_txt += f" - Dificultad para Tareas Habituales: {f_d * 100}%\n"
+        informe_txt += f" - Suma de Factores Aplicada: {round(factores, 2)}%\n"
+
+        informe_txt += f"\n{'='*40}\n"
+        informe_txt += f"ILP FINAL: {round(total_f, 2)}%\n"
+        informe_txt += f"{'='*40}\n"
+
+        st.download_button(
+            label="📄 Descargar Informe Pericial (.txt)",
+            data=informe_txt,
+            file_name="informe_pericial_srt.txt",
+            mime="text/plain"
+        )
+
         if st.button("🚨 Reiniciar Pericia"):
             st.session_state.pericia = []
             st.rerun()
