@@ -125,13 +125,20 @@ with st.sidebar:
                 if cat != "Elegir...":
                     df_f = df_f[df_f[col_cat] == cat]
                     col_des = next((c for c in df_f.columns if "descrip" in c.lower()), "Descripción")
+                    col_sub = next((c for c in df_f.columns if "subcategor" in c.lower()), None)
                     item = st.selectbox("Lesión", sorted(df_f[col_des].unique().tolist()), index=None)
                     if item:
+                        fila_seleccionada = df_f[df_f[col_des] == item].iloc[0]
                         col_inc = next((c for c in df_f.columns if "incap" in c.lower() or "%" in c.lower()), "%")
-                        valor = float(df_f[df_f[col_des] == item][col_inc].iloc[0])
+                        valor = float(fila_seleccionada[col_inc])
+
+                        subcat_val = str(fila_seleccionada.get(col_sub, '')).strip() if col_sub else ''
+                        subcat = f" - {subcat_val}" if subcat_val and subcat_val.lower() not in [item.lower(), cat.lower()] else ""
+                        desc_final = f"{cat}{subcat}: {item}"
+
                         st.info(f"**Valor: {valor}%**")
                         if st.button("Agregar Lesión"):
-                            st.session_state.pericia.append({"cap": "Osteoarticular", "reg": hoja, "val": valor, "desc": f"{cat}: {item}", "sector": sec_val, "lado": lat if 'lat' in locals() else None})
+                            st.session_state.pericia.append({"cap": "Osteoarticular", "reg": hoja, "val": valor, "desc": desc_final, "sector": sec_val, "lado": lat if 'lat' in locals() else None})
                             st.rerun()
 
 # --- 2. Cálculos y Visualización ---
